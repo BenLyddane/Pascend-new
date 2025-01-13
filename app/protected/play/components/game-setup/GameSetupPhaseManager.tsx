@@ -29,14 +29,14 @@ export function GameSetupPhaseManager({
   onSetupComplete,
   isPracticeMode = false,
 }: GameSetupPhaseManagerProps) {
-  const [phase, setPhase] = useState<"cancel" | "reorder">("cancel");
-  const [timeRemaining, setTimeRemaining] = useState(20); // Start with 20s for cancel phase
+  const [phase, setPhase] = useState<"ban" | "reorder">("ban");
+  const [timeRemaining, setTimeRemaining] = useState(20); // Start with 20s for ban phase
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startTimeRef = useRef<number | null>(null);
 
-  // Track cancelled cards (2 per deck)
-  const [cancelledCards1, setCancelledCards1] = useState<Card[]>([]);
-  const [cancelledCards2, setCancelledCards2] = useState<Card[]>([]);
+  // Track banned cards (2 per deck)
+  const [bannedCards1, setBannedCards1] = useState<Card[]>([]);
+  const [bannedCards2, setBannedCards2] = useState<Card[]>([]);
 
   // Track remaining cards order
   const [remainingCards1, setRemainingCards1] = useState<Card[]>(() => deck1.cards || []);
@@ -52,13 +52,13 @@ export function GameSetupPhaseManager({
     startTimeRef.current = Date.now();
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startTimeRef.current!) / 1000);
-      const timeLimit = phase === "cancel" ? 20 : 10;
+      const timeLimit = phase === "ban" ? 20 : 10;
       const remaining = Math.max(timeLimit - elapsed, 0);
       setTimeRemaining(remaining);
       
       if (remaining === 0) {
         clearInterval(timerRef.current!);
-        if (phase === "cancel") {
+        if (phase === "ban") {
           setPhase("reorder");
           setTimeRemaining(10);
           startTimeRef.current = Date.now();
@@ -75,14 +75,14 @@ export function GameSetupPhaseManager({
     };
   }, [phase, isPracticeMode]);
 
-  const handleCardCancel = (card: Card, isDeck1: boolean) => {
+  const handleCardBan = (card: Card, isDeck1: boolean) => {
     if (isDeck1) {
-      if (cancelledCards1.length >= 2) return;
-      setCancelledCards1([...cancelledCards1, card]);
+      if (bannedCards1.length >= 2) return;
+      setBannedCards1([...bannedCards1, card]);
       setRemainingCards1(remainingCards1.filter((c) => c.id !== card.id));
     } else {
-      if (cancelledCards2.length >= 2) return;
-      setCancelledCards2([...cancelledCards2, card]);
+      if (bannedCards2.length >= 2) return;
+      setBannedCards2([...bannedCards2, card]);
       setRemainingCards2(remainingCards2.filter((c) => c.id !== card.id));
     }
   };
@@ -102,8 +102,8 @@ export function GameSetupPhaseManager({
   };
 
   const handlePhaseComplete = (isPlayer1: boolean) => {
-    if (phase === "cancel") {
-      // Handle cancel phase completion
+    if (phase === "ban") {
+      // Handle ban phase completion
       if (isPlayer1) {
         setPlayer1Ready(true);
       } else {
@@ -159,8 +159,8 @@ export function GameSetupPhaseManager({
         <div className="grid grid-cols-2 gap-8">
           <PlayerDeckSetup
             cards={remainingCards1}
-            cancelledCards={cancelledCards1}
-            onCardCancel={(card) => handleCardCancel(card, true)}
+            bannedCards={bannedCards1}
+            onCardBan={(card) => handleCardBan(card, true)}
             onCardReorder={(dragIndex, dropIndex) => handleCardReorder(dragIndex, dropIndex, true)}
             onPhaseComplete={() => handlePhaseComplete(true)}
             isReady={player1Ready}
@@ -172,8 +172,8 @@ export function GameSetupPhaseManager({
           {isPracticeMode && (
             <PlayerDeckSetup
               cards={remainingCards2}
-              cancelledCards={cancelledCards2}
-              onCardCancel={(card) => handleCardCancel(card, false)}
+              bannedCards={bannedCards2}
+              onCardBan={(card) => handleCardBan(card, false)}
               onCardReorder={(dragIndex, dropIndex) => handleCardReorder(dragIndex, dropIndex, false)}
               onPhaseComplete={() => handlePhaseComplete(false)}
               isReady={player2Ready}

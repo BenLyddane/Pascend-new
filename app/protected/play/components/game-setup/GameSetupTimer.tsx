@@ -2,7 +2,7 @@
 
 type GameSetupTimerProps = {
   timeRemaining: number;
-  phase: "cancel" | "reorder";
+  phase: "ban" | "reorder";
   isPracticeMode: boolean;
 };
 
@@ -15,7 +15,7 @@ export function GameSetupTimer({ timeRemaining, phase, isPracticeMode }: GameSet
         <span className={`text-3xl font-bold ${timeRemaining <= 5 ? 'text-red-500' : ''}`}>
           {timeRemaining}
         </span>
-        <div className="text-xs mt-1">{phase === "cancel" ? "Cancel" : "Order"}</div>
+        <div className="text-xs mt-1">{phase === "ban" ? "Ban" : "Order"}</div>
       </div>
     </div>
   );

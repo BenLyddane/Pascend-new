@@ -83,10 +83,22 @@ export class BattleManager {
       gameplay_effects: defender.card.gameplay_effects,
     });
 
-    if (attacker.isDefeated || defender.isDefeated) {
-      console.log("One or both battlers are defeated");
-      console.log("Attacker defeated:", attacker.isDefeated);
-      console.log("Defender defeated:", defender.isDefeated);
+    // Check for dead or defeated cards before processing turn
+    if (attacker.isDefeated || defender.isDefeated || attacker.health <= 0 || defender.health <= 0) {
+      console.log("One or both battlers are dead or defeated");
+      console.log("Attacker:", {
+        health: attacker.health,
+        isDefeated: attacker.isDefeated
+      });
+      console.log("Defender:", {
+        health: defender.health,
+        isDefeated: defender.isDefeated
+      });
+      
+      // Mark cards with 0 health as defeated
+      if (attacker.health <= 0) attacker.isDefeated = true;
+      if (defender.health <= 0) defender.isDefeated = true;
+      
       this.stateManager.advanceBattle();
       return null;
     }

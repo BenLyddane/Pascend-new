@@ -8,20 +8,20 @@ import { Button } from "@/components/ui/button";
 
 type PlayerDeckSetupProps = {
   cards: Card[];
-  cancelledCards: Card[];
-  onCardCancel: (card: Card) => void;
+  bannedCards: Card[];
+  onCardBan: (card: Card) => void;
   onCardReorder: (dragIndex: number, dropIndex: number) => void;
   onPhaseComplete: () => void;
   isReady: boolean;
-  phase: "cancel" | "reorder";
+  phase: "ban" | "reorder";
   isPracticeMode: boolean;
   playerName: string;
 };
 
 export function PlayerDeckSetup({
   cards,
-  cancelledCards,
-  onCardCancel,
+  bannedCards,
+  onCardBan,
   onCardReorder,
   onPhaseComplete,
   isReady,
@@ -36,7 +36,7 @@ export function PlayerDeckSetup({
       <div className="space-y-4">
         <div>
           <h4 className="text-sm font-medium mb-2">
-            Cancel Cards (Select 2)
+            Ban Cards (Select 2)
           </h4>
           <div className="grid grid-cols-3 gap-4">
             {cards.map((card, index) => (
@@ -57,10 +57,10 @@ export function PlayerDeckSetup({
                     variant="destructive"
                     size="sm"
                     className="w-full"
-                    onClick={() => onCardCancel(card)}
-                    disabled={cancelledCards.length >= 2 || (!isPracticeMode && phase !== "cancel")}
+                    onClick={() => onCardBan(card)}
+                    disabled={bannedCards.length >= 2 || (!isPracticeMode && phase !== "ban")}
                   >
-                    Cancel
+                    Ban
                   </Button>
                 </div>
               </div>
@@ -68,7 +68,7 @@ export function PlayerDeckSetup({
           </div>
         </div>
 
-        {(phase === "reorder" || cancelledCards.length === 2) && (
+        {(phase === "reorder" || bannedCards.length === 2) && (
           <div>
             <h4 className="text-sm font-medium mb-2">
               Order Remaining Cards
@@ -106,16 +106,14 @@ export function PlayerDeckSetup({
           onClick={onPhaseComplete}
           disabled={
             isReady ||
-            (phase === "cancel" && cancelledCards.length !== 2) ||
+            (phase === "ban" && bannedCards.length !== 2) ||
             (phase === "reorder" && isReady)
           }
           className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
         >
           {isReady 
             ? "Ready!" 
-            : phase === "cancel" 
-              ? "Confirm Cancellations" 
-              : "Confirm Order"}
+            : "Ready"}
         </button>
       </div>
     </div>

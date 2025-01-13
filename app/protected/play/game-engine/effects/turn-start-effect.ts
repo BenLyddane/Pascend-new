@@ -9,6 +9,18 @@ export class TurnStartEffect implements EffectProcessor {
     isAttacker: boolean,
     opposingCard: CardState
   ) {
+    // Check if card is dead before processing turn start
+    if (card.health <= 0) {
+      card.isDefeated = true;
+      return {
+        battleEffect: createBattleEffect(
+          'Death',
+          'turn_start',
+          `${card.card.name} was removed from battle due to having 0 health`
+        )
+      };
+    }
+
     if (effect.effect_type !== 'on_turn_start') return {};
 
     if (effect.effect_icon === 'Flame') {
