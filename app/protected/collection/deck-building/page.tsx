@@ -1,13 +1,15 @@
 import { createClient } from "@/utils/supabase/server";
 import { DeckBuilder } from "./components/DeckBuilder";
-import { fetchCards, type PlayerCard } from "@/app/actions/fetchCards";
+import { fetchCards, type PlayerCard, mergeSpecialEffects } from "@/app/actions/fetchCards";
 import { fetchDecks, type CardWithEffects } from "@/app/actions/fetchDecks";
 
 export const dynamic = "force-dynamic";
 
 export default async function DeckBuilderPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     return null;
@@ -19,17 +21,20 @@ export default async function DeckBuilderPage() {
     fetchDecks(user.id),
   ]);
 
-  console.log('Player Cards:', JSON.stringify(playerCards, null, 2));
+  console.log("Player Cards:", JSON.stringify(playerCards, null, 2));
 
-  // Transform Card[] to CardWithEffects[]
-  const cards: CardWithEffects[] = playerCards.map(card => ({
-    ...card,
-    keywords: card.keywords || [],
-    modifier: card.modifier || 0,
-    is_active: card.is_active || false,
-  }));
+  // Transform Card[] to CardWithEffects[] using mergeSpecialEffects
+  const cards: CardWithEffects[] = playerCards.map((card) => {
+    const cardWithMergedEffects = mergeSpecialEffects(card);
+    return {
+      ...cardWithMergedEffects,
+      keywords: card.keywords || [],
+      modifier: card.modifier || 0,
+      is_active: card.is_active || false,
+    };
+  });
 
-  console.log('Transformed Cards:', JSON.stringify(cards, null, 2));
+  console.log("Transformed Cards:", JSON.stringify(cards, null, 2));
 
   return (
     <main className="container mx-auto py-4">

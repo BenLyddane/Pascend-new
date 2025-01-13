@@ -283,13 +283,15 @@ function parseGameplayEffects(special_effects: Json): CardEffect[] {
     console.log("Final card effects:", JSON.stringify(cardEffects, null, 2));
 
     return cardEffects;
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Error parsing gameplay effects:", error);
-    console.error("Error details:", {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-    });
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      });
+    }
     return [];
   }
 }

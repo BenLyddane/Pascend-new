@@ -2,13 +2,24 @@
 
 import { createClient } from "@/utils/supabase/server";
 import type { Database } from "@/types/database.types";
+import { mergeSpecialEffects } from "./fetchCards";
 
 // Define base types from database schema
 type Card = Database['public']['Tables']['cards']['Row'];
 type PlayerDeck = Database['public']['Tables']['player_decks']['Row'];
+type SpecialProperty = Database['public']['Tables']['special_properties']['Row'];
 
 // Define the extended types that include relationships
-export type CardWithEffects = Card;
+export type CardWithEffects = Omit<Card, 'special_effects'> & {
+  special_effects: {
+    name: string;
+    description: string;
+    effect_type: string;
+    effect_icon: string;
+    value: number;
+  }[];
+  special_properties?: SpecialProperty[];
+};
 
 export type DeckWithCards = Omit<PlayerDeck, 'card_list'> & {
   cards: CardWithEffects[];
@@ -24,10 +35,26 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
   const supabase = await createClient();
 
   try {
-    // Fetch all active cards for the user
+    // Fetch all active cards for the user with their special properties
     const { data: cards, error: cardsError } = await supabase
       .from("cards")
-      .select('*')
+      .select(`
+        *,
+        card_properties:card_properties(
+          value,
+          special_properties:special_properties(
+            name,
+            description,
+            effect_type,
+            effect_icon,
+            value,
+            power_level,
+            rarity_modifier,
+            allowed_rarities,
+            combo_tags
+          )
+        )
+      `)
       .eq("user_id", userId)
       .eq("is_active", true);
 
@@ -47,7 +74,13 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
       // Parse the card_list JSON and match with full card objects
       const cardList = deck.card_list as { id: string }[];
       const deckCards = cardList
-        .map(({ id }) => cards.find(card => card.id === id))
+        .map(({ id }) => {
+          const card = cards.find(card => card.id === id);
+          if (!card) return undefined;
+          
+          // Use mergeSpecialEffects to handle both special_properties and special_effects
+          return mergeSpecialEffects(card);
+        })
         .filter((card): card is CardWithEffects => card !== undefined);
 
       // Create the deck object without the card_list property

@@ -92,7 +92,7 @@ export async function keepCard({
       edition: tempCards.edition || "standard",
     };
 
-    // 3. Insert the permanent card
+    // 3. Insert the permanent card and handle special properties
     const { data: insertedCard, error: insertError } = await supabase
       .from("cards")
       .insert(cardData)
@@ -104,10 +104,66 @@ export async function keepCard({
       throw new Error(`Failed to save kept card: ${insertError.message}`);
     }
 
+    // 3a. Handle special properties
+    if (tempCards.special_effects && Array.isArray(tempCards.special_effects)) {
+      for (const effect of tempCards.special_effects) {
+        // First, get or create the special property
+        const { data: specialProperty, error: specialPropertyError } = await supabase
+          .from("special_properties")
+          .select("*")
+          .eq("name", effect.name)
+          .single();
+
+        if (specialPropertyError && specialPropertyError.code !== 'PGRST116') { // PGRST116 is "not found"
+          console.error("Error fetching special property:", specialPropertyError);
+          continue;
+        }
+
+        let propertyId;
+        if (!specialProperty) {
+          // Create new special property
+          const { data: newProperty, error: createPropertyError } = await supabase
+            .from("special_properties")
+            .insert({
+              name: effect.name,
+              description: effect.description,
+              effect_type: effect.effect_type,
+              effect_icon: effect.effect_icon,
+              value: effect.value,
+              power_level: 1, // Default value
+              allowed_rarities: ['common', 'rare', 'epic', 'legendary']
+            })
+            .select()
+            .single();
+
+          if (createPropertyError) {
+            console.error("Error creating special property:", createPropertyError);
+            continue;
+          }
+          propertyId = newProperty.id;
+        } else {
+          propertyId = specialProperty.id;
+        }
+
+        // Create card_properties entry
+        const { error: cardPropertyError } = await supabase
+          .from("card_properties")
+          .insert({
+            card_id: insertedCard.id,
+            property_id: propertyId,
+            value: effect.value
+          });
+
+        if (cardPropertyError) {
+          console.error("Error creating card property:", cardPropertyError);
+        }
+      }
+    }
+
     // 4. Update collection stats
     const { error: statsError } = await supabase.rpc("update_collection_stats", {
-      p_user_id: userId,
-      p_card_rarity: cardData.rarity,
+      user_id: userId,
+      card_rarity: cardData.rarity,
     });
 
     if (statsError) {
