@@ -125,6 +125,7 @@ export default function GamePlay({
                 survivingCards={[...gameState.player1Cards, ...gameState.player2Cards]}
                 onReturnToMatchmaking={onReturnToMatchmaking}
                 isMatchmaking={isOnlineMatch}
+                drawReason={gameState.drawReason}
               />
             </div>
           )}

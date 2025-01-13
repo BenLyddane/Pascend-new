@@ -9,71 +9,50 @@ import { EffectsProcessor } from "./effects-processor";
 import { DamageCalculator } from "./damage-calculator";
 
 export class BattleManager {
-  private stateHistory: Map<string, number>;
-  private readonly MAX_REPEATED_STATES = 5;
-  private readonly MAX_TURNS = 100;
+  private readonly STATE_HISTORY_SIZE = 20;
+  private stateHistory: string[] = [];
 
   constructor(
     private gameState: GameState,
     private effectsProcessor: EffectsProcessor,
     private damageCalculator: DamageCalculator
-  ) {
-    this.stateHistory = new Map();
-  }
-
-  private lastHealthStates: { attacker: number; defender: number }[] = [];
-  private readonly MAX_HEALTH_HISTORY = 10;
-  private readonly MIN_HEALTH_CHANGE = 1;
+  ) {}
 
   private checkForInfiniteLoop(): boolean {
     const { attacker, defender } = this.getCurrentBattlers();
 
-    // Add current health state
-    this.lastHealthStates.push({
-      attacker: attacker.health,
-      defender: defender.health,
+    // Create a state snapshot that includes all relevant battle information
+    const currentState = JSON.stringify({
+      attackerHealth: attacker.health,
+      attackerPower: attacker.power,
+      attackerEffects: attacker.card.gameplay_effects,
+      defenderHealth: defender.health,
+      defenderPower: defender.power,
+      defenderEffects: defender.card.gameplay_effects,
+      turn: this.gameState.currentTurn % 2, // Only need to know if it's player 1 or 2's turn
     });
 
-    // Keep only last N states
-    if (this.lastHealthStates.length > this.MAX_HEALTH_HISTORY) {
-      this.lastHealthStates.shift();
+    // Add current state to history
+    this.stateHistory.push(currentState);
+
+    // Keep only the last N states
+    if (this.stateHistory.length > this.STATE_HISTORY_SIZE) {
+      this.stateHistory.shift();
     }
 
-    // If we don't have enough history yet, continue
-    if (this.lastHealthStates.length < this.MAX_HEALTH_HISTORY) {
-      return false;
-    }
+    // Check if this exact state has occurred before
+    const stateOccurrences = this.stateHistory.filter(
+      (state) => state === currentState
+    ).length;
 
-    // Check if health has changed significantly in the last N turns
-    const firstState = this.lastHealthStates[0];
-    const lastState = this.lastHealthStates[this.lastHealthStates.length - 1];
-    const healthChangeAttacker = Math.abs(
-      lastState.attacker - firstState.attacker
-    );
-    const healthChangeDefender = Math.abs(
-      lastState.defender - firstState.defender
-    );
-
-    // Check for infinite loop conditions:
-    // 1. Health hasn't changed significantly
-    // 2. Excessive turns
-    // 3. Both players are healing/not taking damage
-    const noSignificantChange =
-      healthChangeAttacker < this.MIN_HEALTH_CHANGE &&
-      healthChangeDefender < this.MIN_HEALTH_CHANGE;
-    const excessiveTurns = this.gameState.currentTurn >= this.MAX_TURNS;
-    const bothHealing =
-      lastState.attacker >= firstState.attacker &&
-      lastState.defender >= firstState.defender;
-
-    if (noSignificantChange || excessiveTurns || bothHealing) {
-      console.log("Infinite loop detected - declaring draw");
-      if (noSignificantChange)
-        console.log("Reason: No significant health change");
-      if (excessiveTurns) console.log("Reason: Excessive turns");
-      if (bothHealing)
-        console.log("Reason: Both players healing/not taking damage");
+    // If we see the same state 3 times, it's definitely an infinite loop
+    if (stateOccurrences >= 3) {
+      console.log(
+        "True infinite loop detected - exact same game state repeated 3 times"
+      );
       this.gameState.winner = "draw";
+      this.gameState.drawReason =
+        "Battle reached an infinite loop - same game state repeating endlessly";
       return true;
     }
 
@@ -81,7 +60,14 @@ export class BattleManager {
   }
 
   processTurn(): BattleLogEntry | null {
-    if (this.gameState.winner || this.checkForInfiniteLoop()) return null;
+    // Check for game-ending conditions
+    if (this.gameState.winner) return null;
+
+    // Check for infinite loop
+    if (this.checkForInfiniteLoop()) {
+      console.log("Game ended due to infinite loop detection");
+      return null;
+    }
 
     const { attacker, defender } = this.getCurrentBattlers();
     console.log("\n=== Starting Turn ===");
@@ -359,6 +345,8 @@ export class BattleManager {
 
     if (p1Defeated && p2Defeated) {
       this.gameState.winner = "draw";
+      this.gameState.drawReason =
+        "Both players' cards were defeated simultaneously";
     } else if (p1Defeated) {
       this.gameState.winner = 2;
     } else if (p2Defeated) {

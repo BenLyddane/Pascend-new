@@ -5,12 +5,13 @@ import type { Database } from "@/types/database.types";
 import { mergeSpecialEffects } from "./fetchCards";
 
 // Define base types from database schema
-type Card = Database['public']['Tables']['cards']['Row'];
-type PlayerDeck = Database['public']['Tables']['player_decks']['Row'];
-type SpecialProperty = Database['public']['Tables']['special_properties']['Row'];
+type Card = Database["public"]["Tables"]["cards"]["Row"];
+type PlayerDeck = Database["public"]["Tables"]["player_decks"]["Row"];
+type SpecialProperty =
+  Database["public"]["Tables"]["special_properties"]["Row"];
 
 // Define the extended types that include relationships
-export type CardWithEffects = Omit<Card, 'special_effects'> & {
+export type CardWithEffects = Omit<Card, "special_effects"> & {
   special_effects: {
     name: string;
     description: string;
@@ -21,7 +22,7 @@ export type CardWithEffects = Omit<Card, 'special_effects'> & {
   special_properties?: SpecialProperty[];
 };
 
-export type DeckWithCards = Omit<PlayerDeck, 'card_list'> & {
+export type DeckWithCards = Omit<PlayerDeck, "card_list"> & {
   cards: CardWithEffects[];
 };
 
@@ -38,7 +39,8 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
     // Fetch all active cards for the user with their special properties
     const { data: cards, error: cardsError } = await supabase
       .from("cards")
-      .select(`
+      .select(
+        `
         *,
         card_properties:card_properties(
           value,
@@ -54,7 +56,8 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
             combo_tags
           )
         )
-      `)
+      `
+      )
       .eq("user_id", userId)
       .eq("is_active", true);
 
@@ -63,7 +66,7 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
     // Fetch all active decks for the user
     const { data: decks, error: decksError } = await supabase
       .from("player_decks")
-      .select('*')
+      .select("*")
       .eq("user_id", userId)
       .eq("is_active", true);
 
@@ -75,9 +78,9 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
       const cardList = deck.card_list as { id: string }[];
       const deckCards = cardList
         .map(({ id }) => {
-          const card = cards.find(card => card.id === id);
+          const card = cards.find((card) => card.id === id);
           if (!card) return undefined;
-          
+
           // Use mergeSpecialEffects to handle both special_properties and special_effects
           return mergeSpecialEffects(card);
         })
@@ -92,12 +95,9 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
       };
     });
 
-    // Process all cards with mergeSpecialEffects
-    const processedCards = cards.map(card => mergeSpecialEffects(card));
-
     return {
       decks: normalizedDecks,
-      cards: processedCards,
+      cards: cards,
     };
   } catch (error) {
     console.error("Error fetching decks and cards:", error);

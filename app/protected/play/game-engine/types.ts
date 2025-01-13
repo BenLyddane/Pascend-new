@@ -129,6 +129,7 @@ export interface GameState {
     card2Index: number;
   };
   winner: 1 | 2 | "draw" | null;
+  drawReason?: string;
   battleLog: BattleLogEntry[];
 }
 

@@ -137,13 +137,15 @@ export class EffectsProcessor {
           console.log("Matched special effect:", specialEffect);
         }
 
-        const effectTiming = this.getEffectTiming(effect.effect_type);
-        if (effectTiming !== timing) {
+        const expectedTiming = this.getEffectTiming(effect.effect_type);
+        if (expectedTiming !== timing) {
           console.log(
-            `Skipped effect ${effect.effect_type} (wrong timing: ${effectTiming} vs ${timing})`
+            `Skipped effect ${effect.effect_type} (current phase: ${timing}, requires: ${expectedTiming})`
           );
           return;
         }
+
+        console.log(`Processing ${effect.effect_type} effect during ${timing} phase`);
 
         // Process effect through appropriate processor
         for (const processor of this.processors) {

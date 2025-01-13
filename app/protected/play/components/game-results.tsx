@@ -7,6 +7,7 @@ type GameResultsProps = {
   survivingCards: CardState[];
   onReturnToMatchmaking?: () => void;
   isMatchmaking?: boolean;
+  drawReason?: string;
 };
 
 export default function GameResults({
@@ -14,12 +15,18 @@ export default function GameResults({
   survivingCards,
   onReturnToMatchmaking,
   isMatchmaking = false,
+  drawReason,
 }: GameResultsProps) {
   return (
     <div className="bg-card/50 p-4 rounded-lg text-center">
       <h2 className="text-xl font-bold mb-2">
         {winner === "draw" ? "It's a Draw!" : `Player ${winner} Wins!`}
       </h2>
+      {winner === "draw" && drawReason && (
+        <p className="text-sm text-muted-foreground mb-4">
+          {drawReason}
+        </p>
+      )}
       {winner !== "draw" && survivingCards.length > 0 && (
         <div className="mb-2">
           <h3 className="text-sm font-semibold mb-2">Surviving Cards:</h3>
