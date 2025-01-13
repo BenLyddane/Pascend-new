@@ -1,0 +1,41 @@
+{
+    "cardGeneration": {
+      "systemPrompt": "You are a creative card game designer. Each card should have a short, witty name (1-4 words) and a playful flavor-text description in the style of Magic: The Gathering. Make them cute, fun, or funny, and closely related to the card’s title. Return only JSON in the format {\"name\": \"<name>\", \"description\": \"<description>\"} with no additional text.",
+      "temperature": 0.9,
+      "model": "gpt-4",
+      "imageSize": "512x512",
+      "stylePrompts": {
+        "Pixel Art": "Craft visuals reminiscent of early 16-bit console games: bright blocky pixels, minimal shading, and retro video game charm",
+        "Sci Fi": "Design with futuristic technology, neon holograms, sleek metallic surfaces, and cosmic horizons",
+        "Fantasy": "Channel classic medieval fantasy: knights, dragons, swirling magic, ornate runes, and enchanted forests",
+        "Cyberpunk": "Illuminate dark cityscapes with neon glows, cybernetic augments, and gritty dystopian vibes",
+        "Steampunk": "Fuse Victorian elegance with industrial steam power, clockwork gears, brass fittings, and whimsical inventions",
+        "Anime": "Emphasize bold outlines, vibrant colors, dynamic poses, and exaggerated expressions in a Japanese animation style",
+        "Realistic": "Focus on naturalistic lighting, highly detailed textures, and lifelike proportions for a photorealistic feel",
+        "Watercolor": "Create soft, flowing imagery with transparent colors, gentle gradients, and subtle bleeding effects typical of watercolor paintings",
+        "Art Nouveau": "Incorporate elegant curved lines, natural forms, and decorative elements inspired by the late 19th century artistic movement",
+        "Gothic": "Embrace dark, ornate architecture, pointed arches, and dramatic lighting reminiscent of medieval Gothic art",
+        "Minimalist": "Utilize clean lines, simple shapes, and limited color palettes to create striking, modern designs",
+        "Pop Art": "Express bold, vibrant colors and patterns inspired by 1960s pop art, using strong outlines and dot patterns",
+        "Chibi": "Design cute, super-deformed characters with oversized heads and simplified features in an adorable anime style",
+        "Vaporwave": "Mix retro computing aesthetics with pastel colors, glitch effects, and 1980s/90s design elements",
+        "Dark Fantasy": "Create brooding, atmospheric scenes with dark color palettes and ominous fantasy elements",
+        "Retrofuturism": "Combine vintage aesthetics with futuristic elements, as imagined in the 1950s and 1960s",
+        "Comic Book": "Use bold colors, dynamic action poses, and classic comic book shading techniques with halftone patterns",
+        "Stained Glass": "Design with geometric patterns and bold outlines reminiscent of medieval stained glass windows",
+        "Classical Oil": "Emulate traditional oil painting techniques with rich colors and classical composition styles",
+        "Synthwave": "Feature neon colors, grid patterns, and sunset gradients typical of 1980s retro-futuristic artwork",
+        "Low Poly": "Create geometric, faceted designs with triangular shapes and solid color planes",
+        "Art Deco": "Incorporate geometric patterns, luxurious details, and the glamorous style of the 1920s and 1930s",
+        "Studio Ghibli": "Capture the whimsical, detailed animation style of Studio Ghibli films with soft colors and natural elements",
+        "Cosmic Horror": "Design otherworldly, unsettling imagery inspired by Lovecraftian cosmic horror",
+        "Tribal": "Incorporate traditional tribal art patterns, symbols, and earthy color palettes",
+        "Street Art": "Feature urban art styles with spray paint effects, bold colors, and graffiti-inspired elements",
+        "Biomechanical": "Blend organic forms with mechanical elements in the style of H.R. Giger",
+        "Impressionist": "Create scenes with visible brushstrokes and light effects inspired by 19th-century Impressionism",
+        "Ethereal": "Design dreamy, atmospheric scenes with soft light and magical elements",
+        "Abstract": "Express pure form and color without representational elements, focusing on shapes and patterns"
+      }
+    }
+  }
+  
