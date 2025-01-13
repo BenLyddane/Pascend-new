@@ -1,7 +1,17 @@
-import { GameCard, GameState, CardState, BattleLogEntry, GameStats, convertToGameCard, CardEffect, DbCard } from './types';
-import { EffectsProcessor } from './effects-processor';
-import { DamageCalculator } from './damage-calculator';
-import { BattleManager } from './battle-manager';
+import {
+  GameCard,
+  GameState,
+  CardState,
+  BattleLogEntry,
+  GameStats,
+  convertToGameCard,
+  CardEffect,
+  DbCard,
+  parseGameplayEffects,
+} from "./types";
+import { EffectsProcessor } from "./effects-processor";
+import { DamageCalculator } from "./damage-calculator";
+import { BattleManager } from "./battle-manager";
 
 export class GameEngine {
   private gameState: GameState;
@@ -10,13 +20,16 @@ export class GameEngine {
   private damageCalculator: DamageCalculator;
   private battleManager: BattleManager;
 
-  constructor(player1Cards: DbCard[] | GameCard[], player2Cards: DbCard[] | GameCard[]) {
+  constructor(
+    player1Cards: DbCard[] | GameCard[],
+    player2Cards: DbCard[] | GameCard[]
+  ) {
     console.log("\n=== Initializing Game Engine ===");
     this.gameStats = {
       totalDamageDealt: 0,
       cardsDefeated: 0,
       turnsPlayed: 0,
-      specialAbilitiesUsed: 0
+      specialAbilitiesUsed: 0,
     };
 
     const player1GoesFirst = Math.random() < 0.5;
@@ -27,58 +40,60 @@ export class GameEngine {
       currentTurn: 1,
       player1GoesFirst,
       player1Cards: player1Cards.map((card) => {
-        console.log('\n=== Converting Player 1 Card ===');
-        console.log('Original card:', {
+        console.log("\n=== Converting Player 1 Card ===");
+        console.log("Original card:", {
           name: card.name,
           special_effects: JSON.stringify(card.special_effects, null, 2),
-          modifier: card.modifier
+          modifier: card.modifier,
         });
-        const gameCard = 'gameplay_effects' in card ? card : convertToGameCard(card);
-        console.log('Converted game card:', {
+        const gameCard =
+          "gameplay_effects" in card ? card : convertToGameCard(card);
+        console.log("Converted game card:", {
           name: gameCard.name,
           gameplay_effects: JSON.stringify(gameCard.gameplay_effects, null, 2),
-          modifier: gameCard.modifier
+          modifier: gameCard.modifier,
         });
         const cardState = {
           card: gameCard,
           health: gameCard.health,
           maxHealth: gameCard.health,
           power: gameCard.power,
-          effects: Array.isArray(gameCard.gameplay_effects) ? [...gameCard.gameplay_effects] : [], // Ensure effects is always an array
+          effects: Array.isArray(gameCard.gameplay_effects) ? [...gameCard.gameplay_effects] : [],
           isDefeated: false,
         };
-        console.log('Created card state:', {
+        console.log("Created card state:", {
           name: cardState.card.name,
           effects: JSON.stringify(cardState.effects, null, 2),
-          modifier: cardState.card.modifier
+          modifier: cardState.card.modifier,
         });
         return cardState;
       }),
       player2Cards: player2Cards.map((card) => {
-        console.log('\n=== Converting Player 2 Card ===');
-        console.log('Original card:', {
+        console.log("\n=== Converting Player 2 Card ===");
+        console.log("Original card:", {
           name: card.name,
           special_effects: JSON.stringify(card.special_effects, null, 2),
-          modifier: card.modifier
+          modifier: card.modifier,
         });
-        const gameCard = 'gameplay_effects' in card ? card : convertToGameCard(card);
-        console.log('Converted game card:', {
+        const gameCard =
+          "gameplay_effects" in card ? card : convertToGameCard(card);
+        console.log("Converted game card:", {
           name: gameCard.name,
           gameplay_effects: JSON.stringify(gameCard.gameplay_effects, null, 2),
-          modifier: gameCard.modifier
+          modifier: gameCard.modifier,
         });
         const cardState = {
           card: gameCard,
           health: gameCard.health,
           maxHealth: gameCard.health,
           power: gameCard.power,
-          effects: Array.isArray(gameCard.gameplay_effects) ? [...gameCard.gameplay_effects] : [], // Ensure effects is always an array
+          effects: Array.isArray(gameCard.gameplay_effects) ? [...gameCard.gameplay_effects] : [],
           isDefeated: false,
         };
-        console.log('Created card state:', {
+        console.log("Created card state:", {
           name: cardState.card.name,
           effects: JSON.stringify(cardState.effects, null, 2),
-          modifier: cardState.card.modifier
+          modifier: cardState.card.modifier,
         });
         return cardState;
       }),

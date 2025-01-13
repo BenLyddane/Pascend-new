@@ -228,7 +228,7 @@ export function convertToUiCard(gameCard: GameCard): UiCard {
   };
 }
 
-function parseGameplayEffects(special_effects: Json): CardEffect[] {
+export function parseGameplayEffects(special_effects: Json): CardEffect[] {
   console.log("\n=== Parsing Gameplay Effects ===");
   console.log(
     "Input special_effects:",

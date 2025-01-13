@@ -39,6 +39,22 @@ export class TurnStartEffect implements EffectProcessor {
       };
     }
 
+    if (effect.effect_icon === 'RefreshCw') {
+      // Apply card's modifier to the healing value
+      const modifiedValue = effect.value * (card.card.modifier || 1);
+      const healing = Math.round(modifiedValue);
+      card.health = Math.min(card.card.health, card.health + healing); // Don't heal above max health
+      
+      const effectName = specialEffect?.name || effect.effect_type;
+      return {
+        battleEffect: createBattleEffect(
+          'RefreshCw',
+          'turn_start',
+          `${effectName}: ${card.card.name} restored ${healing} health (${effect.value} × ${card.card.modifier || 1} modifier)`
+        )
+      };
+    }
+
     return {};
   }
 }
