@@ -78,6 +78,7 @@ export interface CardState {
   maxHealth: number;
   power: number;
   isDefeated: boolean;
+  effects: CardEffect[]; // Add effects array to track active effects during gameplay
 }
 
 // Battle effect timing types
@@ -87,7 +88,8 @@ export type BattleEffectTiming =
   | "combat"
   | "post_combat"
   | "turn_end"
-  | "on_death";
+  | "on_death"
+  | "game_end";
 
 // Entry in the battle log
 export interface BattleLogEntry {
@@ -112,7 +114,7 @@ export interface BattleLogEntry {
 }
 
 export interface BattleEffect {
-  type: "hit" | "special" | "stat" | "defeat";
+  type: "hit" | "special" | "stat" | "defeat" | "game_end";
   description: string;
   icon?: string;
   timing?: BattleEffectTiming;
@@ -192,9 +194,14 @@ export function isValidEffectIcon(icon: string): icon is EffectIcon {
 
 // Helper function to convert UI card to game engine card
 export function convertToGameCard(card: DbCard): GameCard {
+  // Parse special_effects if it's a string
+  const parsedEffects = typeof card.special_effects === 'string' 
+    ? JSON.parse(card.special_effects)
+    : card.special_effects;
+
   return {
     ...card,
-    gameplay_effects: parseGameplayEffects(card.special_effects),
+    gameplay_effects: parseGameplayEffects(parsedEffects),
   };
 }
 

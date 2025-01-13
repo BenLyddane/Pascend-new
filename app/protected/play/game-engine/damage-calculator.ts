@@ -15,7 +15,7 @@ export class DamageCalculator {
     // Start with base power
     let damage = attacker.power;
 
-    // Apply attacker's power modifications
+    // First apply attacker's power boosts
     console.log("\nAttacker Effects:");
     if (abilities.attackerEffects.length === 0) {
       console.log("No attacker effects");
@@ -29,20 +29,25 @@ export class DamageCalculator {
       }
     });
 
-    // Apply defender's power modifications
+    // Then apply defender's damage reduction
     console.log("\nDefender Effects:");
     if (abilities.defenderEffects.length === 0) {
       console.log("No defender effects");
     }
+    let totalReduction = 0;
     abilities.defenderEffects.forEach((effect) => {
       if (effect.type === "power_reduction") {
-        const reducedDamage = Math.max(0, damage - effect.value);
-        console.log(
-          `Power reduction: -${effect.value} (${damage} → ${reducedDamage})`
-        );
-        damage = reducedDamage;
+        totalReduction += effect.value;
       }
     });
+    
+    if (totalReduction > 0) {
+      const reducedDamage = Math.max(0, damage - totalReduction);
+      console.log(
+        `Total damage reduction: -${totalReduction} (${damage} → ${reducedDamage})`
+      );
+      damage = reducedDamage;
+    }
 
     console.log(`\nFinal damage: ${damage}`);
     console.log("=====================");

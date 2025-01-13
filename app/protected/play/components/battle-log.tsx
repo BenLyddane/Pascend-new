@@ -43,6 +43,11 @@ const effectStyles = {
     bg: 'bg-purple-500/10',
     text: 'text-purple-500',
     defaultIcon: '💀'
+  },
+  'game_end': {
+    bg: 'bg-yellow-500/10',
+    text: 'text-yellow-500',
+    defaultIcon: '🏆'
   }
 } as const;
 
@@ -233,7 +238,9 @@ export default function BattleLog({
                   ...entry.effects
                     .filter(e => e.timing === 'turn_end'),
                   ...entry.effects
-                    .filter(e => e.timing === 'on_death')
+                    .filter(e => e.timing === 'on_death'),
+                  ...entry.effects
+                    .filter(e => e.timing === 'game_end')
                 ].map((effect, i) => renderEffect(effect, i))}
               </div>
             </Card>

@@ -115,16 +115,16 @@ export class EffectsProcessor {
 
     // Helper function to process effects for a card
     const processCardEffects = (card: CardState, isAttacker: boolean) => {
-      if (!card.card.gameplay_effects) {
+      if (!card.effects) {
         console.log(`No effects found for ${card.card.name}`);
         return;
       }
       console.log(
         `Processing effects for ${card.card.name}:`,
-        card.card.gameplay_effects
+        card.effects
       );
 
-      card.card.gameplay_effects.forEach((effect: CardEffect) => {
+      card.effects.forEach((effect: CardEffect) => {
         this.gameStats.specialAbilitiesUsed++;
 
         // Get effect details from card's special_effects

@@ -3,7 +3,11 @@
 import { useState, useEffect } from "react";
 import { CardModal } from "@/components/card-modal";
 import { GameEngine } from "@/app/protected/play/game-engine/game-engine";
-import { Card as GameCardType, CardState, GameState } from "@/app/protected/play/game-engine/types";
+import {
+  GameCard,
+  CardState,
+  GameState,
+} from "@/app/protected/play/game-engine/types";
 import BattleLog from "./battle-log";
 import CardZone from "./card-zone";
 import GameResults from "./game-results";
@@ -11,8 +15,8 @@ import { createClient } from "@/utils/supabase/client";
 import { updateMatchStats } from "@/app/actions/updateMatchStats";
 
 type GamePlayProps = {
-  player1Cards: GameCardType[];
-  player2Cards: GameCardType[];
+  player1Cards: GameCard[];
+  player2Cards: GameCard[];
   onGameEnd?: (winner: 1 | 2 | "draw", stats: any) => void;
   isOnlineMatch?: boolean;
   opponentId?: string;
@@ -27,12 +31,40 @@ export default function GamePlay({
   opponentId,
   onReturnToMatchmaking,
 }: GamePlayProps) {
-  const [selectedCard, setSelectedCard] = useState<GameCardType | null>(null);
+  const [selectedCard, setSelectedCard] = useState<GameCard | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [gameEngine] = useState(
-    () => new GameEngine(player1Cards, player2Cards)
-  );
-  const [gameState, setGameState] = useState(() => gameEngine.getGameState());
+  const [gameEngine] = useState(() => {
+    console.log("\n=== Initializing Game Engine ===");
+    console.log(
+      "Player 1 Cards:",
+      player1Cards.map((card) => ({
+        name: card.name,
+        gameplay_effects: card.gameplay_effects,
+        special_effects: card.special_effects,
+      }))
+    );
+    console.log(
+      "Player 2 Cards:",
+      player2Cards.map((card) => ({
+        name: card.name,
+        gameplay_effects: card.gameplay_effects,
+        special_effects: card.special_effects,
+      }))
+    );
+
+    const engine = new GameEngine(player1Cards, player2Cards);
+    console.log("Game Engine Created");
+    return engine;
+  });
+
+  const [gameState, setGameState] = useState(() => {
+    const state = gameEngine.getGameState();
+    console.log("\n=== Initial Game State ===");
+    console.log("Player 1 Cards:", state.player1Cards);
+    console.log("Player 2 Cards:", state.player2Cards);
+    console.log("Player 1 Goes First:", state.player1GoesFirst);
+    return state;
+  });
   const [autoPlayInterval, setAutoPlayInterval] =
     useState<NodeJS.Timeout | null>(null);
   const [userName, setUserName] = useState<string>("");
@@ -42,18 +74,20 @@ export default function GamePlay({
   // Get user's display name
   useEffect(() => {
     async function getUserName() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
-          .from('player_profiles')
-          .select('settings')
-          .eq('user_id', user.id)
+          .from("player_profiles")
+          .select("settings")
+          .eq("user_id", user.id)
           .single();
-        
+
         if (profile?.settings?.display_name) {
           setUserName(profile.settings.display_name);
         } else {
-          setUserName(user.email?.split('@')[0] || 'Player');
+          setUserName(user.email?.split("@")[0] || "Player");
         }
       }
     }
@@ -67,11 +101,14 @@ export default function GamePlay({
     const interval = setInterval(() => {
       if (!isMounted) return;
 
+      console.log("\n=== Processing Turn ===");
       const logEntry = gameEngine.processTurn();
       if (!isMounted) return;
 
       // Update game state immediately after each turn
       const currentState = gameEngine.getGameState();
+      console.log("Turn:", currentState.currentTurn);
+      console.log("Battle Log Entry:", logEntry);
       setGameState((prevState: GameState) => ({
         ...currentState,
         battleLog: [...currentState.battleLog], // Create new array reference to ensure re-render
@@ -120,9 +157,12 @@ export default function GamePlay({
           {/* Game Results Overlay */}
           {gameState.winner && (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
-              <GameResults 
+              <GameResults
                 winner={gameState.winner}
-                survivingCards={[...gameState.player1Cards, ...gameState.player2Cards]}
+                survivingCards={[
+                  ...gameState.player1Cards,
+                  ...gameState.player2Cards,
+                ]}
                 onReturnToMatchmaking={onReturnToMatchmaking}
                 isMatchmaking={isOnlineMatch}
                 drawReason={gameState.drawReason}
@@ -153,7 +193,6 @@ export default function GamePlay({
             }}
           />
         </div>
-
       </div>
 
       {/* Right Column: Battle Log */}

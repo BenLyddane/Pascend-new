@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
-import { Card } from "@/app/protected/play/game-engine/types";
+import { Card, GameCard, convertToGameCard } from "@/app/protected/play/game-engine/types";
 import { Database } from "@/types/database.types";
 
 type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
@@ -10,7 +10,8 @@ type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
 };
 
 type MatchmakingStatus = "waiting" | "matched" | "completed";
-type MatchmakingEntry = Database["public"]["Tables"]["matchmaking_queue"]["Row"];
+type MatchmakingEntry =
+  Database["public"]["Tables"]["matchmaking_queue"]["Row"];
 import { createClient } from "@/utils/supabase/client";
 import DeckSelector from "./deck-selector";
 import GameSetup from "./game-setup";
@@ -19,10 +20,12 @@ import GamePlay from "./game-play";
 type MatchState = "selecting" | "queuing" | "setup" | "playing";
 
 // Helper function to parse card list
-const parseCardList = (cardList: Database["public"]["Tables"]["player_decks"]["Row"]["card_list"]): Card[] => {
+const parseCardList = (
+  cardList: Database["public"]["Tables"]["player_decks"]["Row"]["card_list"]
+): Card[] => {
   if (!cardList) return [];
   try {
-    if (typeof cardList === 'string') {
+    if (typeof cardList === "string") {
       return JSON.parse(cardList) as Card[];
     }
     if (Array.isArray(cardList)) {
@@ -30,7 +33,7 @@ const parseCardList = (cardList: Database["public"]["Tables"]["player_decks"]["R
     }
     return [];
   } catch (e) {
-    console.error('Error parsing card list:', e);
+    console.error("Error parsing card list:", e);
     return [];
   }
 };
@@ -46,8 +49,8 @@ export default function TestMatchmaking() {
     deck: Deck;
   } | null>(null);
   const [gameCards, setGameCards] = useState<{
-    player1Cards: Card[];
-    player2Cards: Card[];
+    player1Cards: GameCard[];
+    player2Cards: GameCard[];
   }>({
     player1Cards: [],
     player2Cards: [],
@@ -111,7 +114,7 @@ export default function TestMatchmaking() {
       // Add cards array to opponent deck
       const deckWithCards: Deck = {
         ...opponentDeck,
-        cards: parseCardList(opponentDeck.card_list)
+        cards: parseCardList(opponentDeck.card_list),
       };
 
       setOpponent({
@@ -134,10 +137,30 @@ export default function TestMatchmaking() {
     if (player1Ready) {
       // Simulate opponent being ready after a short delay
       setTimeout(() => {
-        setGameCards({
-          player1Cards: deck1Cards,
-          player2Cards: deck2Cards,
+      // Convert UI cards to game cards
+      const gameCards1 = deck1Cards.map((card) => {
+        const gameCard = convertToGameCard(card);
+        console.log("Converted Player 1 Card:", {
+          name: gameCard.name,
+          gameplay_effects: gameCard.gameplay_effects,
+          special_effects: gameCard.special_effects,
         });
+        return gameCard;
+      });
+      const gameCards2 = deck2Cards.map((card) => {
+        const gameCard = convertToGameCard(card);
+        console.log("Converted Player 2 Card:", {
+          name: gameCard.name,
+          gameplay_effects: gameCard.gameplay_effects,
+          special_effects: gameCard.special_effects,
+        });
+        return gameCard;
+      });
+
+      setGameCards({
+        player1Cards: gameCards1,
+        player2Cards: gameCards2,
+      });
         setMatchState("playing");
       }, 1000);
     }
@@ -216,8 +239,10 @@ export default function TestMatchmaking() {
   // Check admin status
   useEffect(() => {
     const checkAdminStatus = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id === 'a0b2c7cb-bc5a-42c9-9c8a-35b1b4dda0a8') {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user?.id === "a0b2c7cb-bc5a-42c9-9c8a-35b1b4dda0a8") {
         setIsAdmin(true);
       }
     };
@@ -262,7 +287,7 @@ export default function TestMatchmaking() {
             // Add cards array when setting selected deck
             setSelectedDeck({
               ...deck,
-              cards: parseCardList(deck.card_list)
+              cards: parseCardList(deck.card_list),
             });
           }}
         />

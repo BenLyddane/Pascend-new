@@ -13,7 +13,7 @@ export class DeathEffect implements EffectProcessor {
 
     if (effect.effect_icon === 'Bomb') {
       const modifiedValue = Math.round(effect.value * (card.card.modifier || 1));
-      const target = isAttacker ? opposingCard : card;
+      const target = opposingCard;  // Always target the opposing card for Explosive Demise
       target.health = Math.max(0, target.health - modifiedValue);
       
       const effectName = specialEffect?.name || effect.effect_type;

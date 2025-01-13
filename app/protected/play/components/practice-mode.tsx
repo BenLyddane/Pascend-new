@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Card } from "@/app/protected/play/game-engine/types";
+import {
+  Card,
+  GameCard,
+  convertToGameCard,
+} from "@/app/protected/play/game-engine/types";
 import { Database } from "@/types/database.types";
 
 type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
   cards: Card[];
 };
+
 import DeckSelector from "./deck-selector";
 import GameSetup from "./game-setup";
 import GamePlay from "./game-play";
@@ -23,8 +28,8 @@ export default function PracticeMode() {
     deck2: null,
   });
   const [gameCards, setGameCards] = useState<{
-    player1Cards: Card[];
-    player2Cards: Card[];
+    player1Cards: GameCard[];
+    player2Cards: GameCard[];
   }>({
     player1Cards: [],
     player2Cards: [],
@@ -48,10 +53,38 @@ export default function PracticeMode() {
     player1Ready: boolean,
     player2Ready: boolean
   ) => {
+    console.log("\n=== Practice Mode Setup Complete ===");
+    console.log("Player 1 Ready:", player1Ready);
+    console.log("Player 2 Ready:", player2Ready);
+    console.log("Deck 1 Cards:", deck1Cards);
+    console.log("Deck 2 Cards:", deck2Cards);
+
     if (player1Ready && player2Ready) {
+      console.log("\n=== Converting Cards for Game Engine ===");
+      // Convert UI cards to game cards
+      const gameCards1 = deck1Cards.map((card) => {
+        const gameCard = convertToGameCard(card);
+        console.log("Converted Player 1 Card:", {
+          name: gameCard.name,
+          gameplay_effects: gameCard.gameplay_effects,
+          special_effects: gameCard.special_effects,
+        });
+        return gameCard;
+      });
+      const gameCards2 = deck2Cards.map((card) => {
+        const gameCard = convertToGameCard(card);
+        console.log("Converted Player 2 Card:", {
+          name: gameCard.name,
+          gameplay_effects: gameCard.gameplay_effects,
+          special_effects: gameCard.special_effects,
+        });
+        return gameCard;
+      });
+
+      console.log("\n=== Setting Game Cards and Transitioning to Playing ===");
       setGameCards({
-        player1Cards: deck1Cards,
-        player2Cards: deck2Cards,
+        player1Cards: gameCards1,
+        player2Cards: gameCards2,
       });
       setGameState("playing");
     }

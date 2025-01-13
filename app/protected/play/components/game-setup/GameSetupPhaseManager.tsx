@@ -111,10 +111,14 @@ export function GameSetupPhaseManager({
       }
 
       // In practice mode, transition to reorder when both players are ready
-      if (isPracticeMode && ((isPlayer1 && player2Ready) || (!isPlayer1 && player1Ready))) {
-        setPhase("reorder");
-        setPlayer1Ready(false);
-        setPlayer2Ready(false);
+      if (isPracticeMode) {
+        const newPlayer1Ready = isPlayer1 ? true : player1Ready;
+        const newPlayer2Ready = isPlayer1 ? player2Ready : true;
+        if (newPlayer1Ready && newPlayer2Ready) {
+          setPhase("reorder");
+          setPlayer1Ready(false);
+          setPlayer2Ready(false);
+        }
       } else if (!isPracticeMode) {
         // In non-practice mode, transition immediately for player 1
         setPhase("reorder");
@@ -128,8 +132,12 @@ export function GameSetupPhaseManager({
       }
 
       // Complete setup when both players are ready in practice mode
-      if (isPracticeMode && ((isPlayer1 && player2Ready) || (!isPlayer1 && player1Ready))) {
-        onSetupComplete(remainingCards1, remainingCards2, true, true);
+      if (isPracticeMode) {
+        const newPlayer1Ready = isPlayer1 ? true : player1Ready;
+        const newPlayer2Ready = isPlayer1 ? player2Ready : true;
+        if (newPlayer1Ready && newPlayer2Ready) {
+          onSetupComplete(remainingCards1, remainingCards2, true, true);
+        }
       } else if (!isPracticeMode) {
         // In non-practice mode, complete immediately
         onSetupComplete(remainingCards1, remainingCards2, isPlayer1, !isPlayer1);
