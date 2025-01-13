@@ -77,7 +77,6 @@ export interface CardState {
   health: number;
   maxHealth: number;
   power: number;
-  effects: CardEffect[];
   isDefeated: boolean;
 }
 

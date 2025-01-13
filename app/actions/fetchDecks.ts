@@ -92,9 +92,12 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
       };
     });
 
+    // Process all cards with mergeSpecialEffects
+    const processedCards = cards.map(card => mergeSpecialEffects(card));
+
     return {
       decks: normalizedDecks,
-      cards: cards,
+      cards: processedCards,
     };
   } catch (error) {
     console.error("Error fetching decks and cards:", error);

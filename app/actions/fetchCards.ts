@@ -58,7 +58,7 @@ export function mergeSpecialEffects(card: Card): CardWithEffects {
   
   return {
     ...cardWithoutEffects,
-    special_effects: [...dbEffects, ...jsonEffects]
+    special_effects: dbEffects  // Only use effects from card_properties
   };
 }
 

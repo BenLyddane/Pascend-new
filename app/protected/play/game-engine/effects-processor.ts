@@ -100,43 +100,48 @@ export class EffectsProcessor {
     };
 
     console.log(`\n=== Processing ${timing} phase effects ===`);
-    console.log('Attacker:', {
+    console.log("Attacker:", {
       name: attacker.card.name,
-      effects: attacker.effects,
+      gameplay_effects: attacker.card.gameplay_effects,
       special_effects: attacker.card.special_effects,
-      modifier: attacker.card.modifier
+      modifier: attacker.card.modifier,
     });
-    console.log('Defender:', {
+    console.log("Defender:", {
       name: defender.card.name,
-      effects: defender.effects,
+      gameplay_effects: defender.card.gameplay_effects,
       special_effects: defender.card.special_effects,
-      modifier: defender.card.modifier
+      modifier: defender.card.modifier,
     });
 
     // Helper function to process effects for a card
     const processCardEffects = (card: CardState, isAttacker: boolean) => {
-      if (!card.effects) {
+      if (!card.card.gameplay_effects) {
         console.log(`No effects found for ${card.card.name}`);
         return;
       }
-      console.log(`Processing effects for ${card.card.name}:`, card.effects);
+      console.log(
+        `Processing effects for ${card.card.name}:`,
+        card.card.gameplay_effects
+      );
 
-      card.effects.forEach((effect: CardEffect) => {
+      card.card.gameplay_effects.forEach((effect: CardEffect) => {
         this.gameStats.specialAbilitiesUsed++;
 
         // Get effect details from card's special_effects
         const specialEffects = this.getSpecialEffects(card);
-        console.log('Special effects found:', specialEffects);
+        console.log("Special effects found:", specialEffects);
         const specialEffect =
           specialEffects.find((se) => se.effect_type === effect.effect_type) ||
           null;
         if (specialEffect) {
-          console.log('Matched special effect:', specialEffect);
+          console.log("Matched special effect:", specialEffect);
         }
 
         const effectTiming = this.getEffectTiming(effect.effect_type);
         if (effectTiming !== timing) {
-          console.log(`Skipped effect ${effect.effect_type} (wrong timing: ${effectTiming} vs ${timing})`);
+          console.log(
+            `Skipped effect ${effect.effect_type} (wrong timing: ${effectTiming} vs ${timing})`
+          );
           return;
         }
 
@@ -150,10 +155,12 @@ export class EffectsProcessor {
             isAttacker ? defender : attacker
           );
 
-          console.log('Effect processor result:', result);
+          console.log("Effect processor result:", result);
           if (result.battleEffect) {
-            console.log(`Processing ${effect.effect_type} effect with icon ${effect.effect_icon}`);
-            console.log('Card modifier:', card.card.modifier);
+            console.log(
+              `Processing ${effect.effect_type} effect with icon ${effect.effect_icon}`
+            );
+            console.log("Card modifier:", card.card.modifier);
             // If we have a custom description from the card's special effects, use it
             if (specialEffect?.description) {
               const finalDescription = specialEffect.description.replace(

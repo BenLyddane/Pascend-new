@@ -289,49 +289,6 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
         <div>
           <h3 className="text-sm font-semibold mb-2">Effects</h3>
           <div className="flex flex-wrap gap-2">
-            {card.effects?.map((effect, index) => (
-              <TooltipProvider key={`legacy-${index}`}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="w-8 h-8 rounded-full bg-[#1a1b26] flex items-center justify-center cursor-pointer hover:bg-[#2a2b36] transition-colors">
-                      {effect === "Explosive" && (
-                        <Image
-                          src="/effects/explosion.svg"
-                          alt="Explosive"
-                          width={20}
-                          height={20}
-                        />
-                      )}
-                      {effect === "Offensive" && (
-                        <Image
-                          src="/effects/sword.svg"
-                          alt="Offensive"
-                          width={20}
-                          height={20}
-                        />
-                      )}
-                      {effect === "Defensive" && (
-                        <Image
-                          src="/effects/shield.svg"
-                          alt="Defensive"
-                          width={20}
-                          height={20}
-                        />
-                      )}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="right"
-                    align="center"
-                    className="bg-[#1a1b26] text-white z-[100]"
-                    sideOffset={8}
-                  >
-                    <p>{effect}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
-
             {effects.map(([type, name, description, value], index) => (
               <TooltipProvider key={`special-${index}`}>
                 <Tooltip>
