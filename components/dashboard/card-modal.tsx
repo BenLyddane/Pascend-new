@@ -18,7 +18,7 @@ export function CardModal({ card, isOpen, onClose }: CardModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl overflow-visible relative z-50">
+      <DialogContent className="max-w-2xl overflow-visible z-[200]">
         <div className="overflow-visible relative">
         <DialogHeader>
           <DialogTitle>Card Details</DialogTitle>

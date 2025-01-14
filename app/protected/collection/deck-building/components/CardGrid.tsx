@@ -100,8 +100,8 @@ export function CardGrid({
       </div>
 
       <div className="flex flex-col space-y-6">
-        <ScrollArea className="h-[calc(100vh-22rem)] overflow-visible">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 pr-4 overflow-visible">
+        <ScrollArea className="h-[calc(100vh-22rem)]">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-8 pr-4 relative">
             {paginatedCards.map((card) => (
               <div key={card.id} className="w-full">
                 <div

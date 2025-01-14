@@ -18,7 +18,7 @@ export function CardModal({ card, isOpen, onClose }: CardModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl overflow-visible z-[200]">
         <DialogHeader>
           <DialogTitle>Card Details</DialogTitle>
         </DialogHeader>

@@ -154,7 +154,7 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
     <div
       onClick={onClick}
       className={cn(
-        "w-[280px] bg-white dark:bg-neutral-900 rounded-lg overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-all duration-300 shadow-lg",
+        "w-[280px] bg-white dark:bg-neutral-900 rounded-lg cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-all duration-300 shadow-lg",
         className
       )}
     >
@@ -198,9 +198,9 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
                 {card.description}
               </p>
             </TooltipTrigger>
-            <TooltipContent
-              side="bottom"
-              align="center"
+            <TooltipContent 
+              side="top" 
+              align="center" 
               className="max-w-[300px] p-4 z-[9999]"
               sideOffset={10}
               avoidCollisions={true}
@@ -229,7 +229,7 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
         </div>
 
         {/* Effects */}
-        <div>
+        <div className="relative overflow-visible">
           <h3 className="text-sm font-semibold mb-2">Effects</h3>
           <div className="flex flex-wrap gap-2">
             {effects.map(([type, name, description, value], index) => (
@@ -245,7 +245,7 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
                     </div>
                   </TooltipTrigger>
                   <TooltipContent
-                    side="bottom"
+                    side="top"
                     align="center"
                     className="max-w-[300px] p-4 z-[9999] bg-[#1a1b26] text-white"
                     sideOffset={10}
