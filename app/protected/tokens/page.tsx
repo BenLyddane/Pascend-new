@@ -1,6 +1,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { TokenPurchase } from "@/components/token-purchase";
+import { verifyStripeSession } from "@/app/actions/verifyStripeSession";
 import {
   Card,
   CardContent,
@@ -9,8 +10,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-export default async function TokensPage() {
+export default async function TokensPage({
+  searchParams,
+}: {
+  searchParams: { [key: string]: string | undefined };
+}) {
   const supabase = await createClient();
+
+  // Handle Stripe redirect with session ID
+  if (searchParams.session_id) {
+    await verifyStripeSession(searchParams.session_id);
+  }
 
   const {
     data: { user },
@@ -48,18 +58,26 @@ export default async function TokensPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Free Tokens</p>
                 <p className="text-xl font-semibold">{profile?.tokens || 0}</p>
-                <p className="text-xs text-muted-foreground mt-1">Not tradeable</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Not tradeable
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Purchased Tokens</p>
-                <p className="text-xl font-semibold">{profile?.purchased_tokens || 0}</p>
+                <p className="text-sm text-muted-foreground">
+                  Purchased Tokens
+                </p>
+                <p className="text-xl font-semibold">
+                  {profile?.purchased_tokens || 0}
+                </p>
                 <p className="text-xs text-green-500 mt-1">Tradeable</p>
               </div>
             </div>
           </div>
           <TokenPurchase
             userId={user.id}
-            currentTokens={(profile?.tokens || 0) + (profile?.purchased_tokens || 0)}
+            currentTokens={
+              (profile?.tokens || 0) + (profile?.purchased_tokens || 0)
+            }
           />
         </CardContent>
       </Card>
