@@ -1,60 +1,53 @@
-// components/dashboard/dash-play.tsx
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   GamepadIcon,
   SwordIcon,
-  UsersIcon,
-  BotIcon,
   TrophyIcon,
   Loader2Icon,
 } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
-import { Suspense } from "react";
+import { createClient } from "@/utils/supabase/client";
+import { useState, useEffect } from "react";
 
 interface GameStats {
+  totalMatches: number;
   currentStreak: number;
-  dailyGamesPlayed: number;
-  isInMatch: boolean;
+  rankPoints: number;
+  wins: number;
+  losses: number;
+  rankTier: string;
 }
 
-async function getPlayerGameStats(): Promise<GameStats> {
-  const supabase = await createClient();
+async function getPlayerGameStats(): Promise<GameStats | null> {
+  const supabase = createClient();
 
-  // Get the current user
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    return {
-      currentStreak: 0,
-      dailyGamesPlayed: 0,
-      isInMatch: false,
-    };
-  }
+  if (!user) return null;
 
-  // Get player's game stats
-  const { data: stats, error } = await supabase
-    .from("player_stats")
-    .select("current_streak, daily_games_played, is_in_match")
+  const { data: profile, error } = await supabase
+    .from("player_profiles")
+    .select("total_matches, current_streak, rank_points, wins, losses, rank_tier")
     .eq("user_id", user.id)
     .single();
 
   if (error) {
     console.error("Error fetching game stats:", error);
-    return {
-      currentStreak: 0,
-      dailyGamesPlayed: 0,
-      isInMatch: false,
-    };
+    return null;
   }
 
   return {
-    currentStreak: stats?.current_streak || 0,
-    dailyGamesPlayed: stats?.daily_games_played || 0,
-    isInMatch: stats?.is_in_match || false,
+    totalMatches: profile?.total_matches || 0,
+    currentStreak: profile?.current_streak || 0,
+    rankPoints: profile?.rank_points || 0,
+    wins: profile?.wins || 0,
+    losses: profile?.losses || 0,
+    rankTier: profile?.rank_tier || 'Unranked',
   };
 }
 
@@ -100,64 +93,60 @@ function LoadingState() {
   );
 }
 
-async function DashPlayContent() {
-  const stats = await getPlayerGameStats();
+function DashPlayContent() {
+  const [stats, setStats] = useState<GameStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getPlayerGameStats().then(stats => {
+      setStats(stats);
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) return <LoadingState />;
 
   return (
     <CardContent className="space-y-4">
       {/* Game Stats */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
-          <span className="text-sm text-muted-foreground">Daily Games</span>
-          <span className="text-2xl font-bold">{stats.dailyGamesPlayed}</span>
+          <span className="text-sm text-muted-foreground">Win/Loss</span>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-bold text-green-500">{stats?.wins || 0}</span>
+            <span className="text-lg font-bold text-muted-foreground">/</span>
+            <span className="text-2xl font-bold text-red-500">{stats?.losses || 0}</span>
+          </div>
         </div>
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
-          <span className="text-sm text-muted-foreground">Current Streak</span>
+          <span className="text-sm text-muted-foreground">Rank</span>
           <div className="flex items-center gap-1">
-            <span className="text-2xl font-bold">{stats.currentStreak}</span>
+            <span className="text-xl font-bold">{stats?.rankTier || 'Unranked'}</span>
             <TrophyIcon size={16} className="text-yellow-500" />
+          </div>
+        </div>
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+          <span className="text-sm text-muted-foreground">Rank Points</span>
+          <div className="flex items-center gap-1">
+            <span className="text-2xl font-bold">{stats?.rankPoints || 0}</span>
+            <SwordIcon size={16} className="text-blue-500" />
           </div>
         </div>
       </div>
 
-      {/* Quick Match Button */}
-      <GameModeButton
-        href={
-          stats.isInMatch ? "/protected/play/current" : "/protected/play/quick"
-        }
-        icon={GamepadIcon}
-        title={stats.isInMatch ? "Resume Match" : "Quick Match"}
-        description={
-          stats.isInMatch
-            ? "Continue your current game"
-            : "Play against a random opponent"
-        }
-      />
-
-      {/* Other Game Modes */}
-      <div className="grid grid-cols-2 gap-4">
+      {/* Play Buttons */}
+      <div className="space-y-2">
         <GameModeButton
-          href="/protected/play/practice"
-          icon={BotIcon}
-          title="Practice"
+          href="/protected/play"
+          icon={GamepadIcon}
+          title="Play Now"
+          description="Start a new game"
         />
-
         <GameModeButton
-          href="/protected/play/friends"
-          icon={UsersIcon}
-          title="Play Friends"
-        />
-
-        <GameModeButton
-          href="/protected/play/tournament"
-          icon={TrophyIcon}
-          title="Tournament"
-        />
-
-        <GameModeButton
-          href="/protected/play/training"
+          href="/protected/play?mode=practice"
           icon={SwordIcon}
-          title="Training"
+          title="Practice Mode"
+          description="Play against AI"
         />
       </div>
     </CardContent>
@@ -176,11 +165,7 @@ export function DashPlay() {
           More options →
         </Link>
       </CardHeader>
-      <Suspense fallback={<LoadingState />}>
-        <DashPlayContent />
-      </Suspense>
+      <DashPlayContent />
     </Card>
   );
 }
-
-export default DashPlay;

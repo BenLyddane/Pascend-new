@@ -113,13 +113,13 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
   type EffectTuple = [string, string, string, number];
 
   // Transform special effects into tuple format
-  const effects: EffectTuple[] = (card.special_effects || []).map(effect => {
+  const effects: EffectTuple[] = (card.special_effects || []).map((effect) => {
     const effectType = inferEffectType(effect.name, effect.description);
     return [
       effectType,
       effect.name,
       effect.description,
-      effect.value
+      effect.value,
     ] as EffectTuple;
   });
 
@@ -191,17 +191,19 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
         </div>
 
         {/* Description */}
-        <TooltipProvider>
+        <TooltipProvider delayDuration={0}>
           <Tooltip>
             <TooltipTrigger asChild>
               <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 cursor-pointer">
                 {card.description}
               </p>
             </TooltipTrigger>
-            <TooltipContent 
-              side="right" 
-              align="start" 
-              className="max-w-[300px] p-4 z-[100]"
+            <TooltipContent
+              side="bottom"
+              align="center"
+              className="max-w-[300px] p-4 z-[9999]"
+              sideOffset={10}
+              avoidCollisions={true}
             >
               <p className="text-sm whitespace-normal">{card.description}</p>
             </TooltipContent>
@@ -231,7 +233,7 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
           <h3 className="text-sm font-semibold mb-2">Effects</h3>
           <div className="flex flex-wrap gap-2">
             {effects.map(([type, name, description, value], index) => (
-              <TooltipProvider key={`special-${index}`}>
+              <TooltipProvider key={`special-${index}`} delayDuration={0}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div
@@ -243,13 +245,14 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
                     </div>
                   </TooltipTrigger>
                   <TooltipContent
-                    side="right"
+                    side="bottom"
                     align="center"
-                    className="bg-[#1a1b26] text-white z-[100]"
-                    sideOffset={8}
+                    className="max-w-[300px] p-4 z-[9999] bg-[#1a1b26] text-white"
+                    sideOffset={10}
+                    avoidCollisions={true}
                   >
-                    <p className="font-semibold">{name}</p>
-                    <p className="text-sm">
+                    <p className="font-semibold whitespace-normal">{name}</p>
+                    <p className="text-sm whitespace-normal">
                       {replaceModifiers(description, card.modifier, value)}
                     </p>
                   </TooltipContent>

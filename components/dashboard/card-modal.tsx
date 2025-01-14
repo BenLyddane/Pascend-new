@@ -18,12 +18,14 @@ export function CardModal({ card, isOpen, onClose }: CardModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl overflow-visible relative z-50">
+        <div className="overflow-visible relative">
         <DialogHeader>
           <DialogTitle>Card Details</DialogTitle>
         </DialogHeader>
         <div className="flex justify-center p-4">
           <GameCard card={card} />
+        </div>
         </div>
       </DialogContent>
     </Dialog>

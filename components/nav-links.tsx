@@ -3,7 +3,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { GamepadIcon, TrophyIcon, LayersIcon, UserIcon, ShoppingCartIcon, CoinsIcon } from "lucide-react";
+import { GamepadIcon, TrophyIcon, LayersIcon, UserIcon, ShoppingCartIcon, CoinsIcon, PlusCircleIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavLinksProps {
@@ -20,6 +20,11 @@ export default function NavLinks({ email, displayName }: NavLinksProps) {
       name: "Collection",
       href: "/protected/collection",
       icon: <LayersIcon size={16} />,
+    },
+    {
+      name: "Create Cards",
+      href: "/protected/collection/create-cards",
+      icon: <PlusCircleIcon size={16} />,
     },
     {
       name: "Trading",

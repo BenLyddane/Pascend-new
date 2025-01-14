@@ -16,20 +16,31 @@ interface LeaderboardPlayer {
 async function getTopPlayers(): Promise<LeaderboardPlayer[]> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase
-    .from("players")
-    .select("id, username, points, win_rate")
-    .order("points", { ascending: false })
+  // Get top players from player_profiles
+  const { data: profiles, error } = await supabase
+    .from("player_profiles")
+    .select(`
+      user_id,
+      rank_points,
+      wins,
+      total_matches,
+      settings
+    `)
+    .order("rank_points", { ascending: false })
     .limit(3);
 
-  if (error) {
+  if (error || !profiles) {
     console.error("Error fetching leaderboard:", error);
     return [];
   }
 
-  return data.map((player, index) => ({
-    ...player,
-    rank: index + 1,
+  return profiles.map((profile, index) => ({
+    id: profile.user_id,
+    username: profile.settings?.displayName || "Unknown Player",
+    points: profile.rank_points || 0,
+    win_rate: profile.total_matches ? 
+      Math.round((profile.wins || 0) / profile.total_matches * 100) : 0,
+    rank: index + 1
   }));
 }
 
