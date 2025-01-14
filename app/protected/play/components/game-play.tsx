@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { CardModal } from "@/components/card-modal";
-import { GameCard, CardState, GameState } from "@/app/protected/play/game-engine/types";
+import {
+  GameCard,
+  CardState,
+  GameState,
+} from "@/app/protected/play/game-engine/types";
 import { GameMode, GAME_MODES } from "../game-modes/types";
 import BattleLog from "./battle-log";
 import CardZone from "./card-zone";
@@ -58,14 +62,14 @@ export default function GamePlay({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "CREATE_GAME",
-            payload: { 
-              player1Cards, 
+            payload: {
+              player1Cards,
               player2Cards,
               player1DeckId,
               player2DeckId,
-              mode
-            }
-          })
+              mode,
+            },
+          }),
         });
 
         if (!response.ok) {
@@ -75,7 +79,7 @@ export default function GamePlay({
 
         const data = await response.json();
         console.log("Game initialized:", data);
-        
+
         if (mounted) {
           setGameId(data.gameId);
           setGameState(data.state);
@@ -84,7 +88,9 @@ export default function GamePlay({
       } catch (error) {
         console.error("Error initializing game:", error);
         if (mounted) {
-          setError(error instanceof Error ? error.message : "Failed to start game");
+          setError(
+            error instanceof Error ? error.message : "Failed to start game"
+          );
         }
       }
     }
@@ -100,77 +106,211 @@ export default function GamePlay({
     if (!gameId || !gameState || gameState.winner) return;
 
     let mounted = true;
+    let currentChannel: any = null;
+    let lastKnownState = gameState;
 
-    // Subscribe to game state changes
-    const setupSubscription = () => {
-      console.log(`[GamePlay] Setting up subscription for game ${gameId}`);
-      return supabase
-        .channel(`game:${gameId}`)
-        .on<{ game_state: GameState }>(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'active_games',
-            filter: `id=eq.${gameId}`,
-          },
-          (payload) => {
-          if (!mounted) return;
-          
-          try {
-            const newGameState = payload.new.game_state;
-            if (!newGameState) {
-              console.error("[GamePlay] Received update with no game state");
-              return;
-            }
+    // Fetch current game state to ensure continuity
+    const fetchCurrentState = async (retryCount = 0) => {
+      try {
+        // Get current game state directly from database through subscription
+        const { data: game, error } = await supabase
+          .from("active_games")
+          .select("*")
+          .eq("id", gameId)
+          .single();
 
-            setGameState(newGameState);
-            
-            if (newGameState.winner) {
-              if (isOnlineMatch) {
-                saveMatchStats(newGameState.winner, newGameState.stats);
-              }
-              onGameEnd?.(newGameState.winner, newGameState.stats);
-            }
-          } catch (error) {
-            console.error("[GamePlay] Error processing game state update:", error);
-            setError("Error updating game state");
-          }
+        if (error) {
+          throw new Error(`Failed to fetch game state: ${error.message}`);
         }
-      )
-      .subscribe(async (status) => {
-        console.log(`[GamePlay] Subscription status:`, status);
-        if (status === 'SUBSCRIBED') {
-          console.log(`[GamePlay] Successfully subscribed to game ${gameId}`);
-          setIsReconnecting(false);
-          setReconnectAttempts(0);
-          setError(null);
-        } else if (status === 'CLOSED') {
-          console.log(`[GamePlay] Subscription closed for game ${gameId}`);
-          setIsReconnecting(true);
-          
-          // Only attempt to reconnect if we haven't exceeded max attempts
-          if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-            console.log(`[GamePlay] Attempting to reconnect (attempt ${reconnectAttempts + 1})`);
-            setReconnectAttempts(prev => prev + 1);
-            
-            // Wait a bit before attempting to reconnect
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const newChannel = setupSubscription();
-            
-            // If this attempt fails, the status will be CLOSED again
-            if (mounted) {
-              channel.current = newChannel;
-            }
-          } else {
-            setError("Lost connection to game server - please refresh the page");
-            setIsReconnecting(false);
-          }
+
+        if (!game || !game.game_state) {
+          throw new Error("Game not found");
         }
-      });
+
+        return game.game_state as GameState;
+      } catch (error) {
+        console.error(
+          `[GamePlay] Error fetching current state (attempt ${retryCount + 1}/3):`,
+          error
+        );
+
+        if (retryCount < 2) {
+          // Max 3 attempts
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * Math.pow(2, retryCount))
+          );
+          return fetchCurrentState(retryCount + 1);
+        }
+        throw error;
+      }
     };
 
-    let channel = { current: setupSubscription() };
+    // Subscribe to game state changes
+    const setupSubscription = async () => {
+      try {
+        // First get current state to ensure continuity
+        const currentState = await fetchCurrentState();
+
+        // Update our state if we've missed any updates
+        if (currentState.currentTurn > lastKnownState.currentTurn) {
+          console.log("[GamePlay] Updating to current state after gap");
+          setGameState(currentState);
+          lastKnownState = currentState;
+        }
+
+        console.log(`[GamePlay] Setting up subscription for game ${gameId}`);
+        const channel = supabase
+          .channel(`game_${gameId}`, {
+            config: {
+              broadcast: { ack: true },
+              presence: { key: "game" },
+            },
+          })
+          .on<{ game_state: GameState }>(
+            "postgres_changes",
+            {
+              event: "UPDATE",
+              schema: "public",
+              table: "active_games",
+              filter: `id=eq.${gameId}`,
+            },
+            (payload) => {
+              if (!mounted) return;
+
+              try {
+                const newGameState = payload.new.game_state;
+                if (!newGameState) {
+                  console.error(
+                    "[GamePlay] Received update with no game state"
+                  );
+                  return;
+                }
+
+                // Ensure we don't skip any turns or process old states
+                // Skip discontinuity check for the first turn
+                if (
+                  lastKnownState.currentTurn > 1 &&
+                  newGameState.currentTurn !==
+                  lastKnownState.currentTurn + 1
+                ) {
+                  console.log(
+                    "[GamePlay] State discontinuity detected, syncing state"
+                  );
+                  fetchCurrentState()
+                    .then((currentState) => {
+                      if (mounted) {
+                        console.log(
+                          "[GamePlay] Synced to current state:",
+                          currentState.currentTurn
+                        );
+                        setGameState(currentState);
+                        lastKnownState = currentState;
+                      }
+                    })
+                    .catch((error) => {
+                      console.error("[GamePlay] Error syncing state:", error);
+                      setError("Error syncing game state");
+                    });
+                  return;
+                }
+
+                setGameState(newGameState);
+                lastKnownState = newGameState;
+
+                if (newGameState.winner) {
+                  if (isOnlineMatch) {
+                    saveMatchStats(newGameState.winner, newGameState.stats);
+                  }
+                  onGameEnd?.(newGameState.winner, newGameState.stats);
+                }
+              } catch (error) {
+                console.error(
+                  "[GamePlay] Error processing game state update:",
+                  error
+                );
+                setError("Error updating game state");
+              }
+            }
+          )
+          .subscribe(async (status) => {
+            console.log(`[GamePlay] Subscription status:`, status);
+            if (status === "SUBSCRIBED") {
+              console.log(
+                `[GamePlay] Successfully subscribed to game ${gameId}`
+              );
+              setIsReconnecting(false);
+              setReconnectAttempts(0);
+              setError(null);
+            } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+              // Only attempt reconnect if we're not already in the process
+              if (!isReconnecting) {
+                console.log(
+                  `[GamePlay] Subscription ${status} for game ${gameId}`
+                );
+                setIsReconnecting(true);
+
+                if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                  const delay = Math.min(
+                    1000 * Math.pow(2, reconnectAttempts),
+                    5000
+                  );
+                  console.log(
+                    `[GamePlay] Attempting to reconnect in ${delay}ms (attempt ${reconnectAttempts + 1})`
+                  );
+                  setReconnectAttempts((prev) => prev + 1);
+
+                  // Wait before attempting to reconnect
+                  setTimeout(async () => {
+                    if (mounted) {
+                      try {
+                        // Clean up existing subscription
+                        if (currentChannel) {
+                          await currentChannel.unsubscribe();
+                          currentChannel = null;
+                        }
+
+                        // Fetch latest state before resubscribing
+                        const currentState = await fetchCurrentState();
+                        if (mounted) {
+                          setGameState(currentState);
+                          lastKnownState = currentState;
+                          setupSubscription().catch(console.error);
+                        }
+                      } catch (error) {
+                        console.error(
+                          "[GamePlay] Failed to fetch state during reconnect:",
+                          error
+                        );
+                        setError("Error reconnecting to game");
+                        setIsReconnecting(false);
+                      }
+                    }
+                  }, delay);
+                }
+              } else {
+                setError(
+                  "Lost connection to game server - please refresh the page"
+                );
+                setIsReconnecting(false);
+              }
+            }
+          });
+
+        currentChannel = channel;
+        return channel;
+      } catch (error) {
+        console.error("[GamePlay] Error setting up subscription:", error);
+        throw error;
+      }
+    };
+
+    // Initial subscription setup
+    setupSubscription().catch((error) => {
+      console.error("[GamePlay] Fatal error in subscription setup:", error);
+      if (mounted) {
+        setError("Failed to connect to game server");
+      }
+    });
 
     // Start automatic turn processing on the server
     fetch("/api/game/engine", {
@@ -179,9 +319,9 @@ export default function GamePlay({
       body: JSON.stringify({
         action: "START_AUTO_PROCESSING",
         gameId,
-        payload: { mode }
-      })
-    }).catch(error => {
+        payload: { mode },
+      }),
+    }).catch((error) => {
       console.error("[GamePlay] Error starting auto processing:", error);
       if (mounted) {
         setError("Failed to start game processing");
@@ -190,8 +330,12 @@ export default function GamePlay({
 
     return () => {
       mounted = false;
-      channel.current.unsubscribe();
-      
+
+      // Cleanup subscription
+      if (currentChannel) {
+        currentChannel.unsubscribe().catch(console.error);
+      }
+
       // Cleanup game on unmount
       if (gameId) {
         console.log("Cleaning up game:", gameId);
@@ -200,8 +344,8 @@ export default function GamePlay({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "END_GAME",
-            gameId
-          })
+            gameId,
+          }),
         }).catch(console.error);
       }
     };
@@ -210,7 +354,9 @@ export default function GamePlay({
   // Get user's display name
   useEffect(() => {
     async function getUserName() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase
           .from("player_profiles")
@@ -230,7 +376,9 @@ export default function GamePlay({
 
   const saveMatchStats = async (winner: 1 | 2 | "draw", stats: any) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user || !isOnlineMatch || !opponentId) return;
 
       await updateMatchStats(user.id, opponentId, winner, stats);
@@ -290,7 +438,7 @@ export default function GamePlay({
           {/* AI's Cards */}
           <CardZone
             playerNumber={2}
-            playerName={mode === 'practice' ? "Player 2" : "AI Opponent"}
+            playerName={mode === "practice" ? "Player 2" : "AI Opponent"}
             cards={gameState.player2Cards}
             currentBattleIndex={gameState.currentBattle.card2Index}
             onCardClick={(cardState: CardState) => {
@@ -307,7 +455,7 @@ export default function GamePlay({
           entries={gameState.battleLog}
           player1GoesFirst={gameState.player1GoesFirst}
           player1Name={userName}
-          player2Name={mode === 'practice' ? "Player 2" : "AI Opponent"}
+          player2Name={mode === "practice" ? "Player 2" : "AI Opponent"}
         />
       </div>
 

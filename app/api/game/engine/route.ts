@@ -1,17 +1,73 @@
-"use server";
-
 import { createClient } from "@/utils/supabase/server";
-import { ServerGameEngine } from "../server-game-engine";
-import {
-  GameAction,
-  GameState,
-  GameCard,
-} from "@/app/protected/play/game-engine/types";
-import { Database } from "@/types/database.types";
-import { GameMode } from "@/app/protected/play/game-modes/types";
 import { NextResponse } from "next/server";
-import { validateGameAction, validateGameState } from "../validate-game-action";
-import { SupabaseClient } from "@supabase/supabase-js";
+import {
+  GameActionType,
+  GameActionResult,
+  createGame,
+  processTurn,
+  endGame,
+  GameAutoProcessor,
+  GAME_ACTIONS,
+  ActionPayload,
+  CreateGamePayload,
+  ProcessTurnPayload,
+  EndGamePayload
+} from "./game-actions";
+import { GameCard } from "@/app/protected/play/game-engine/types";
+import { GameMode } from "@/app/protected/play/game-modes/types";
+
+interface GameEngineRequest<T extends GameActionType = GameActionType> {
+  action: T;
+  gameId?: string;
+  payload: ActionPayload<T>;
+}
+
+function isGameCard(obj: any): obj is GameCard {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof obj.id === 'string' &&
+    typeof obj.name === 'string' &&
+    typeof obj.power === 'number' &&
+    typeof obj.health === 'number'
+  );
+}
+
+function isCreateGamePayload(action: GameActionType, payload: any): payload is CreateGamePayload {
+  return (
+    action === 'CREATE_GAME' &&
+    typeof payload === 'object' &&
+    payload !== null &&
+    Array.isArray(payload.player1Cards) &&
+    Array.isArray(payload.player2Cards) &&
+    payload.player1Cards.every(isGameCard) &&
+    payload.player2Cards.every(isGameCard) &&
+    typeof payload.mode === 'string' &&
+    typeof payload.player1DeckId === 'string' &&
+    typeof payload.player2DeckId === 'string'
+  );
+}
+
+function isProcessTurnPayload(action: GameActionType, payload: any): payload is ProcessTurnPayload {
+  return (
+    action === 'PROCESS_TURN' &&
+    typeof payload === 'object' &&
+    payload !== null &&
+    typeof payload.action === 'object' &&
+    payload.action !== null &&
+    typeof payload.action.type === 'string' &&
+    typeof payload.mode === 'string'
+  );
+}
+
+function isEndGamePayload(action: GameActionType, payload: any): payload is EndGamePayload {
+  return (
+    action === 'END_GAME' &&
+    typeof payload === 'object' &&
+    payload !== null &&
+    (payload.winnerId === undefined || typeof payload.winnerId === 'string')
+  );
+}
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -24,361 +80,122 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { action, gameId, payload } = await request.json();
+    const requestData = await request.json();
+    const { action, gameId, payload } = requestData as GameEngineRequest;
 
+    // Validate required parameters based on action metadata
+    const actionMeta = GAME_ACTIONS[action];
+    if (!actionMeta) {
+      return NextResponse.json(
+        { error: "Invalid action type" },
+        { status: 400 }
+      );
+    }
+
+    if (actionMeta.requiresGameId && !gameId) {
+      return NextResponse.json(
+        { error: "Game ID is required for this action" },
+        { status: 400 }
+      );
+    }
+
+    // Process the action
+    let result: GameActionResult;
     switch (action) {
       case "CREATE_GAME": {
-        const { player1Cards, player2Cards, mode } = payload;
-
-        // Validate cards belong to players (skip validation in practice mode)
-        const validationResult = await validateGameCards(
-          supabase,
-          user.id,
-          player1Cards,
-          player2Cards,
-          mode
-        );
-        if (!validationResult.success) {
+        if (!isCreateGamePayload(action, payload)) {
           return NextResponse.json(
-            { error: validationResult.error },
+            { error: "Invalid payload for CREATE_GAME action" },
             { status: 400 }
           );
         }
-
-        // Validate deck sizes
-        if (!player1Cards?.length || !player2Cards?.length) {
-          return NextResponse.json(
-            { error: "Invalid deck size" },
-            { status: 400 }
-          );
-        }
-
-        if (player1Cards.length !== player2Cards.length) {
-          return NextResponse.json(
-            { error: "Deck sizes must match" },
-            { status: 400 }
-          );
-        }
-
-        // Create new server-side game instance
-        const gameEngine = new ServerGameEngine(player1Cards, player2Cards);
-        const initialState = gameEngine.getGameState();
-
-        // Create game record in database
-        // Serialize game state to JSON-compatible format
-        const serializedState = JSON.parse(JSON.stringify(initialState));
-
-        let insertData: Database["public"]["Tables"]["active_games"]["Insert"] =
-          {
-            player1_id: user.id,
-            player2_id:
-              mode === "practice" ? user.id : payload.player2Id || user.id,
-            status: "in_progress",
-            game_state: serializedState,
-            player1_deck_id: payload.player1DeckId,
-            player2_deck_id: payload.player2DeckId,
-          };
-
-        const { data: game, error: createError } = await supabase
-          .from("active_games")
-          .insert(insertData)
-          .select()
-          .single();
-
-        if (createError) {
-          console.error("Error creating game:", createError);
-          return NextResponse.json(
-            { error: "Failed to create game" },
-            { status: 500 }
-          );
-        }
-
-        // Return the auto-generated game ID from Supabase
-        return NextResponse.json({
-          gameId: game.id, // UUID automatically generated by Supabase
-          state: initialState,
-        });
+        result = await createGame(supabase, user.id, payload);
+        break;
       }
 
       case "PROCESS_TURN": {
-        // Get game from database
-        const { data: game, error: fetchError } = await supabase
-          .from("active_games")
-          .select("*")
-          .eq("id", gameId)
-          .single();
-
-        if (fetchError || !game) {
-          console.error("Error fetching game:", fetchError);
+        if (!gameId) {
           return NextResponse.json(
-            { error: "Game not found" },
-            { status: 404 }
-          );
-        }
-
-        // Initialize game engine with stored state
-        const currentState = game.game_state as GameState;
-        console.log("[GameEngine] Retrieved game state:", currentState);
-
-        const gameEngine = new ServerGameEngine([], [], currentState);
-        const stateValidation = validateGameState(currentState);
-        if (!stateValidation.isValid) {
-          return NextResponse.json(
-            { error: stateValidation.error },
+            { error: "Game ID is required" },
             { status: 400 }
           );
         }
-
-        // Process the action without validation in practice mode
-        const mode = payload.mode as GameMode;
-        console.log("[GameEngine] Processing action for mode:", mode);
-
-        if (mode !== "practice") {
-          const actionValidation = validateGameAction(
-            payload,
-            currentState,
-            true
-          );
-          if (!actionValidation.isValid) {
-            return NextResponse.json(
-              { error: actionValidation.error },
-              { status: 400 }
-            );
-          }
-        }
-
-        // Process the action
-        const actionResult = gameEngine.processAction(payload);
-        if (!actionResult.success) {
+        if (!isProcessTurnPayload(action, payload)) {
           return NextResponse.json(
-            { error: actionResult.error },
+            { error: "Invalid payload for PROCESS_TURN action" },
             { status: 400 }
           );
         }
-
-        const newState = gameEngine.getGameState();
-
-        // If game is over, update status
-        if (newState.winner !== null) {
-          console.log(
-            "[GameEngine] Game completed with winner:",
-            newState.winner
-          );
-          const { error: updateError } = await supabase
-            .from("active_games")
-            .update({
-              status: "completed",
-              winner_id: user.id, // For practice mode
-              game_state: JSON.parse(JSON.stringify(newState)),
-            })
-            .eq("id", gameId);
-
-          if (updateError) {
-            console.error(
-              "[GameEngine] Error updating completed game:",
-              updateError
-            );
-          }
-        } else {
-          // Update game state
-          const { error: updateError } = await supabase
-            .from("active_games")
-            .update({ game_state: JSON.parse(JSON.stringify(newState)) })
-            .eq("id", gameId);
-
-          if (updateError) {
-            console.error(
-              "[GameEngine] Error updating game state:",
-              updateError
-            );
-          }
-        }
-
-        return NextResponse.json({
-          result: actionResult,
-          state: newState,
-        });
+        result = await processTurn(supabase, gameId, payload);
+        break;
       }
 
       case "START_AUTO_PROCESSING": {
-        // Get game from database
-        const { data: game, error: fetchError } = await supabase
-          .from("active_games")
-          .select("*")
-          .eq("id", gameId)
-          .single();
-
-        if (fetchError || !game) {
-          console.error("Error fetching game:", fetchError);
+        if (!gameId) {
           return NextResponse.json(
-            { error: "Game not found" },
-            { status: 404 }
+            { error: "Game ID is required" },
+            { status: 400 }
           );
         }
 
-        // Start automatic turn processing in the background
-        const currentState = game.game_state as GameState;
-        const gameEngine = new ServerGameEngine([], [], currentState);
+        // Initialize auto processor
+        const processor = new GameAutoProcessor(supabase, gameId, user.id);
+        
+        // Start processing non-blocking
+        Promise.resolve(processor.startProcessing()).catch(error => {
+          console.error("[GameEngine] Auto processing error:", error);
+        });
 
-        // Process turns with proper timing and state management
-        const processGameTurns = async () => {
-          let gameState = currentState;
-          let lastActionTime = Date.now();
-          const TURN_INTERVAL = 2000; // 2 seconds between turns for better visibility
-
-          while (!gameState.winner) {
-            const now = Date.now();
-            const timeSinceLastAction = now - lastActionTime;
-
-            // Ensure minimum time between actions
-            if (timeSinceLastAction < TURN_INTERVAL) {
-              await new Promise(resolve => 
-                setTimeout(resolve, TURN_INTERVAL - timeSinceLastAction)
-              );
-            }
-
-            // Process turn
-            const actionResult = gameEngine.processAction({
-              type: "END_TURN",
-              payload: {} // Empty payload for END_TURN
-            });
-
-            if (!actionResult.success) {
-              console.error(
-                "[GameEngine] Error processing turn:",
-                actionResult.error
-              );
-              break;
-            }
-
-            gameState = gameEngine.getGameState();
-            lastActionTime = Date.now();
-
-            // Ensure battle log is included in state update
-            const serializedState = JSON.parse(JSON.stringify(gameState));
-            
-            // Update game state in database
-            const { error: updateError } = await supabase
-              .from("active_games")
-              .update({
-                game_state: serializedState,
-                status: gameState.winner ? "completed" : "in_progress",
-                winner_id: gameState.winner ? user.id : null,
-              })
-              .eq("id", gameId);
-
-            if (updateError) {
-              console.error("[GameEngine] Error updating game state:", updateError);
-              break;
-            }
-          }
-        };
-
-        // Start processing turns (non-blocking)
-        processGameTurns().catch(console.error);
-
-        return NextResponse.json({ success: true });
+        result = { data: { success: true } };
+        break;
       }
 
       case "END_GAME": {
-        // First verify the game exists and user has permission
-        const { data: game, error: fetchError } = await supabase
-          .from("active_games")
-          .select("*")
-          .eq("id", gameId)
-          .single();
-
-        if (fetchError || !game) {
-          console.error("Error fetching game:", fetchError);
+        if (!gameId) {
           return NextResponse.json(
-            { error: "Game not found" },
-            { status: 404 }
+            { error: "Game ID is required" },
+            { status: 400 }
           );
         }
-
-        // Verify user has permission to end this game
-        if (game.player1_id !== user.id && game.player2_id !== user.id) {
+        if (!isEndGamePayload(action, payload)) {
           return NextResponse.json(
-            { error: "Unauthorized to end this game" },
-            { status: 403 }
+            { error: "Invalid payload for END_GAME action" },
+            { status: 400 }
           );
         }
-
-        // Only end games that aren't already completed
-        if (game.status !== "completed") {
-          const { error: updateError } = await supabase
-            .from("active_games")
-            .update({
-              status: "completed",
-              game_state: null, // Clear state to save space
-              winner_id: payload.winnerId || null, // Allow specifying winner on game end
-            })
-            .eq("id", gameId);
-
-          if (updateError) {
-            console.error("Error ending game:", updateError);
-            return NextResponse.json(
-              { error: "Failed to end game" },
-              { status: 500 }
-            );
-          }
-        }
-
-        return NextResponse.json({ success: true });
+        result = await endGame(supabase, gameId, user.id, payload);
+        break;
       }
 
-      default:
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
+      default: {
+        const _exhaustiveCheck: never = action;
+        return NextResponse.json(
+          { error: "Invalid action" },
+          { status: 400 }
+        );
+      }
     }
+
+    // Handle action result
+    if ('error' in result) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status || 500 }
+      );
+    }
+
+    return NextResponse.json(result.data);
   } catch (error) {
-    console.error("Game engine error:", error);
+    console.error("[GameEngine] Error:", error);
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       { error: "Internal server error" },
       { status: 500 }
     );
-  }
-}
-
-// Helper functions
-async function validateGameCards(
-  supabase: SupabaseClient<Database, "public", Database["public"]>,
-  userId: string,
-  player1Cards: GameCard[],
-  player2Cards: GameCard[],
-  mode: GameMode
-) {
-  // Skip validation in practice mode
-  if (mode === "practice") {
-    return { success: true };
-  }
-
-  try {
-    // Get all cards that should belong to the players
-    const { data: userCards, error } = await supabase
-      .from("cards")
-      .select("id, user_id")
-      .in("id", [...player1Cards.map((c) => c.id)]);
-
-    if (error) throw error;
-
-    if (!userCards) {
-      return { success: false, error: "Failed to fetch cards" };
-    }
-
-    // Only validate player 1's cards in multiplayer
-    const player1Valid = player1Cards.every((card) =>
-      userCards.some(
-        (userCard) => userCard.id === card.id && userCard.user_id === userId
-      )
-    );
-
-    if (!player1Valid) {
-      return { success: false, error: "Invalid cards in deck" };
-    }
-
-    return { success: true };
-  } catch (error) {
-    console.error("Card validation error:", error);
-    return { success: false, error: "Failed to validate cards" };
   }
 }

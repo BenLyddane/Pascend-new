@@ -10,10 +10,16 @@ export class DamageCalculator {
     }
   ): number {
     console.log("\n=== Damage Calculation ===");
-    console.log(`Base power from ${attacker.card.name}: ${attacker.power}`);
+    console.log(`Base power from ${attacker.card.name}: ${attacker.card.power}`);
 
     // Start with base power
-    let damage = attacker.power;
+    let damage = attacker.card.power;
+
+    // Add modifier
+    if (attacker.card.modifier) {
+      console.log(`Adding modifier: +${attacker.card.modifier} (${damage} → ${damage + attacker.card.modifier})`);
+      damage += attacker.card.modifier;
+    }
 
     // First apply attacker's power boosts
     console.log("\nAttacker Effects:");

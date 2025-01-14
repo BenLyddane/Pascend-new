@@ -162,6 +162,8 @@ export interface GameState {
   drawReason?: string;
   battleLog: BattleLogEntry[];
   stats: GameStats;
+  version?: number;
+  error?: string;
 }
 
 // Game statistics

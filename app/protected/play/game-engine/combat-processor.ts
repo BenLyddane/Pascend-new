@@ -35,31 +35,10 @@ export class CombatProcessor {
       defenderEffects: [...preCombatEffects.defenderEffects, ...combatEffects.defenderEffects],
     };
 
-    // Apply attacker's power modifications
-    let attackerPowerBoost = 0;
-    allEffects.attackerEffects.forEach((effect) => {
-      if (effect.type === "power_boost") {
-        attackerPowerBoost += effect.value;
-        console.log(
-          `Applying power boost to ${attacker.card.name}: +${effect.value}`
-        );
-      }
-    });
-    attacker.power += attackerPowerBoost;
-
-    // Apply defender's power modifications
-    let defenderPowerReduction = 0;
-    allEffects.defenderEffects.forEach((effect) => {
-      if (effect.type === "power_reduction") {
-        defenderPowerReduction += effect.value;
-        console.log(
-          `Applying power reduction to ${defender.card.name}: -${effect.value}`
-        );
-      }
-    });
-    defender.power = Math.max(0, defender.power - defenderPowerReduction);
-
-    // Calculate and apply damage
+    // Calculate damage using effects without modifying base power
+    console.log("\nPre-combat power values:");
+    console.log(`${attacker.card.name} power: ${attacker.power}`);
+    console.log(`${defender.card.name} power: ${defender.power}`);
     const damage = this.damageCalculator.calculateDamage(
       attacker,
       defender,
@@ -69,9 +48,25 @@ export class CombatProcessor {
     this.damageCalculator.applyDamage(defender, damage);
     logEntry.defender.damage = damage;
 
-    // Update power values in log entry
-    logEntry.attacker.endPower = attacker.power;
-    logEntry.defender.endPower = defender.power;
+    // Update power values in log entry - use calculated values
+    const attackerFinalPower = attacker.card.power + 
+      allEffects.attackerEffects.reduce((total, effect) => 
+        effect.type === "power_boost" ? total + effect.value : total, 0);
+    
+    const defenderFinalPower = Math.max(0, defender.card.power - 
+      allEffects.defenderEffects.reduce((total, effect) => 
+        effect.type === "power_reduction" ? total + effect.value : total, 0));
+
+    logEntry.attacker.endPower = attackerFinalPower;
+    logEntry.defender.endPower = defenderFinalPower;
+
+    // Reset power values to their base values after combat
+    attacker.power = attacker.card.power;
+    defender.power = defender.card.power;
+    
+    console.log("\nPost-combat power values (reset to base):");
+    console.log(`${attacker.card.name} power: ${attacker.power}`);
+    console.log(`${defender.card.name} power: ${defender.power}`);
 
     // Add combat effect to log with modifier info
     const attackerModifier = attacker.card.modifier || 0;
@@ -85,16 +80,28 @@ export class CombatProcessor {
       timing: "combat",
     });
 
-    // If damage was dealt, add a gameplay effect to trigger Life Drain
+    // If damage was dealt, add or update Life Drain effect
     if (damage > 0) {
       if (!attacker.effects) {
         attacker.effects = [];
       }
-      attacker.effects.push({
-        effect_type: 'on_damage_dealt',
-        effect_icon: 'Heart',
-        value: 1
-      });
+      
+      // Find existing Life Drain effect
+      const existingEffect = attacker.effects.find(
+        effect => effect.effect_type === 'on_damage_dealt' && effect.effect_icon === 'Heart'
+      );
+      
+      if (existingEffect) {
+        // Update existing effect value
+        existingEffect.value += 1;
+      } else {
+        // Add new effect if none exists
+        attacker.effects.push({
+          effect_type: 'on_damage_dealt',
+          effect_icon: 'Heart',
+          value: 1
+        });
+      }
     }
   }
 

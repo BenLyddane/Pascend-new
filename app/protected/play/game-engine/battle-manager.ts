@@ -90,95 +90,88 @@ export class BattleManager {
       gameplay_effects: defender.card.gameplay_effects,
     });
 
-    // Check for dead or defeated cards before processing turn
-    if (attacker.isDefeated || defender.isDefeated || attacker.health <= 0 || defender.health <= 0) {
-      console.log("One or both battlers are dead or defeated");
-      console.log("Attacker:", {
-        health: attacker.health,
-        isDefeated: attacker.isDefeated
-      });
-      console.log("Defender:", {
-        health: defender.health,
-        isDefeated: defender.isDefeated
-      });
-      
-      // Mark cards with 0 health as defeated
-      if (attacker.health <= 0) attacker.isDefeated = true;
-      if (defender.health <= 0) defender.isDefeated = true;
-      
+    // Mark cards with 0 health as defeated and advance battle if needed
+    if (attacker.health <= 0) {
+      console.log("Attacker defeated:", attacker.card.name);
+      attacker.isDefeated = true;
+      this.stateManager.advanceBattle();
+      return null;
+    }
+    if (defender.health <= 0) {
+      console.log("Defender defeated:", defender.card.name);
+      defender.isDefeated = true;
       this.stateManager.advanceBattle();
       return null;
     }
 
-    // Create battle log entry
-    const logEntry = this.battleLogger.createLogEntry(
-      attacker,
-      defender,
-      this.gameState.currentTurn
-    );
+      try {
+        console.log("Processing turn phases");
+        
+        // Create log entry for this turn
+        const turnLogEntry = this.battleLogger.createLogEntry(
+          attacker,
+          defender,
+          this.gameState.currentTurn
+        );
 
-    try {
-      // Process effects in order
-      console.log("Processing turn phases");
-      
-      this.effectPhaseProcessor.processPhase(
-        "turn_start",
-        attacker,
-        defender,
-        logEntry
-      );
-      
-      this.effectPhaseProcessor.processPhase(
-        "pre_combat",
-        attacker,
-        defender,
-        logEntry
-      );
-      
-      console.log("Processing combat between", {
-        attacker: attacker.card.name,
-        defender: defender.card.name
-      });
-      
-      this.combatProcessor.processCombat(attacker, defender, logEntry);
-      
-      this.effectPhaseProcessor.processPhase(
-        "post_combat",
-        attacker,
-        defender,
-        logEntry
-      );
-      
-      this.effectPhaseProcessor.cleanupTemporaryEffects(attacker);
-      
-      this.effectPhaseProcessor.processPhase(
-        "turn_end",
-        attacker,
-        defender,
-        logEntry
-      );
+        // Process pre-combat effects
+        
+        this.effectPhaseProcessor.processPhase("turn_start", attacker, defender, turnLogEntry);
+        this.effectPhaseProcessor.processPhase("pre_combat", attacker, defender, turnLogEntry);
+        
+        // Process main combat phase
+        console.log("Processing combat - Main phase", {
+          attacker: attacker.card.name,
+          defender: defender.card.name
+        });
+        
+        // Attacker's strike
+        this.combatProcessor.processCombat(attacker, defender, turnLogEntry);
+        
+        // Check for defeated defender
+        if (defender.health <= 0) {
+          console.log("Defender defeated during main combat");
+          this.combatProcessor.processDefeat(defender, attacker, turnLogEntry);
+          defender.isDefeated = true;
+          
+          // Update log and advance battle
+          this.battleLogger.updateHealthValues(turnLogEntry, attacker, defender);
+          this.battleLogger.logBattleEntry(turnLogEntry);
+          this.stateManager.advanceBattle();
+          return turnLogEntry;
+        }
+        
+        // Defender's counter-attack if they survived
+        console.log("Processing combat - Counter-attack phase");
+        this.combatProcessor.processCombat(defender, attacker, turnLogEntry);
+        
+        // Check for defeated attacker
+        if (attacker.health <= 0) {
+          console.log("Attacker defeated during counter-attack");
+          attacker.isDefeated = true;
+          
+          // Update log and advance battle
+          this.battleLogger.updateHealthValues(turnLogEntry, attacker, defender);
+          this.battleLogger.logBattleEntry(turnLogEntry);
+          this.stateManager.advanceBattle();
+          return turnLogEntry;
+        }
+        
+        // Process post-combat effects
+        this.effectPhaseProcessor.processPhase("post_combat", attacker, defender, turnLogEntry);
+        
+        // Clean up temporary effects for both attacker and defender
+        this.effectPhaseProcessor.cleanupTemporaryEffects(attacker);
+        this.effectPhaseProcessor.cleanupTemporaryEffects(defender);
+        
+        this.effectPhaseProcessor.processPhase("turn_end", attacker, defender, turnLogEntry);
 
-      // Check for defeated cards
-      if (defender.health <= 0) {
-        console.log("Defender defeated:", defender.card.name);
-        this.combatProcessor.processDefeat(defender, attacker, logEntry);
-        defender.isDefeated = true;
-      }
-      
-      if (attacker.health <= 0) {
-        console.log("Attacker defeated:", attacker.card.name);
-        attacker.isDefeated = true;
-      }
-
-      // Update final health values and log the entry
-      this.battleLogger.updateHealthValues(logEntry, attacker, defender);
-      this.battleLogger.logBattleEntry(logEntry);
-
-      // Advance battle state
-      console.log("Advancing battle state");
-      this.stateManager.advanceBattle();
-      this.stateManager.incrementTurn();
-      this.stateManager.checkGameEnd();
+        // Update and log final state
+        this.battleLogger.updateHealthValues(turnLogEntry, attacker, defender);
+        this.battleLogger.logBattleEntry(turnLogEntry);
+        
+        this.stateManager.incrementTurn();
+        this.stateManager.checkGameEnd();
 
       console.log("Turn completed", {
         attackerHealth: attacker.health,
@@ -187,17 +180,23 @@ export class BattleManager {
         winner: this.gameState.winner
       });
 
-      return logEntry;
+      return turnLogEntry;
     } catch (error) {
       console.error("Error processing turn:", error);
+      // Create error log entry
+      const errorLogEntry = this.battleLogger.createLogEntry(
+        attacker,
+        defender,
+        this.gameState.currentTurn
+      );
       // Add error to battle log
-      logEntry.effects.push({
+      errorLogEntry.effects.push({
         type: "error",
         description: `Error processing turn: ${error instanceof Error ? error.message : "Unknown error"}`,
         timing: "error"
       });
-      this.battleLogger.logBattleEntry(logEntry);
-      return logEntry;
+      this.battleLogger.logBattleEntry(errorLogEntry);
+      return errorLogEntry;
     }
   }
 }

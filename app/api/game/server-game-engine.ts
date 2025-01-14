@@ -30,7 +30,7 @@ export class ServerGameEngine {
 
   private processQueue() {
     const now = Date.now();
-    
+
     // Process any actions that have waited long enough
     while (this.actionQueue.length > 0) {
       const nextAction = this.actionQueue[0];
@@ -114,8 +114,8 @@ export class ServerGameEngine {
           totalDamageDealt: 0,
           cardsDefeated: 0,
           turnsPlayed: 0,
-          specialAbilitiesUsed: 0
-        }
+          specialAbilitiesUsed: 0,
+        },
       };
     }
 
@@ -129,7 +129,7 @@ export class ServerGameEngine {
     );
 
     console.log("[ServerGameEngine] Game components initialized");
-    
+
     this.lastProcessedTime = Date.now();
     this.startTurnTimer();
   }
@@ -168,7 +168,7 @@ export class ServerGameEngine {
   } {
     // Add action to queue with timestamp
     const now = Date.now();
-    
+
     // Prevent queue flooding
     if (this.actionQueue.length >= this.MAX_QUEUE_SIZE) {
       return {
@@ -182,11 +182,11 @@ export class ServerGameEngine {
       // Instead of rejecting, queue the action
       this.actionQueue.push({
         timestamp: now,
-        action
+        action,
       });
       return {
         success: true,
-        error: "Action queued for processing"
+        error: "Action queued for processing",
       };
     }
 
@@ -194,7 +194,7 @@ export class ServerGameEngine {
     const result = this.executeAction(action);
     if (result.success) {
       this.lastProcessedTime = now;
-      
+
       // Process any queued actions that are ready
       this.processQueue();
     }
@@ -206,19 +206,8 @@ export class ServerGameEngine {
     success: boolean;
     error?: string;
   } {
-
     // Execute the action based on type
     try {
-      // Update battle log before processing
-      if (action.type === "END_TURN") {
-        const { attacker, defender } = this.battleManager.getCurrentBattlers();
-        if (attacker && defender) {
-          const logEntry = this.battleManager.processTurn();
-          if (logEntry) {
-            this.gameState.battleLog.push(logEntry);
-          }
-        }
-      }
       switch (action.type) {
         case "PLAY_CARD":
           return this.validateAndProcessCardPlay(action);
@@ -266,7 +255,13 @@ export class ServerGameEngine {
 
     try {
       // Process end of turn effects
-      const result = this.battleManager.processTurn();
+      const { attacker, defender } = this.battleManager.getCurrentBattlers();
+      if (attacker && defender) {
+        const logEntry = this.battleManager.processTurn();
+        if (logEntry) {
+          this.gameState.battleLog.push(logEntry);
+        }
+      }
 
       // Update game state
       this.gameState.currentTurn++;
@@ -293,7 +288,6 @@ export class ServerGameEngine {
       this.startTurnTimer();
 
       console.log("Turn processed", {
-        result,
         newTurn: this.gameState.currentTurn,
         winner: this.gameState.winner,
       });
