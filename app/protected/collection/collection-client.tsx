@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, StarIcon, GemIcon } from "lucide-react";
 import {
   Select,
   SelectTrigger,
@@ -19,6 +19,28 @@ interface CollectionClientProps {
   userCards: CardWithEffects[];
 }
 
+interface CardStats {
+  totalCards: number;
+  uniqueCards: number;
+  legendaryCount: number;
+  epicCount: number;
+  collectionProgress: number;
+}
+
+function getCollectionStats(cards: CardWithEffects[]): CardStats {
+  const uniqueCards = cards.length;
+  const legendaryCount = cards.filter(card => card.rarity === "legendary").length;
+  const epicCount = cards.filter(card => card.rarity === "epic").length;
+  
+  return {
+    totalCards: uniqueCards, // For now, total equals unique since we're not tracking duplicates
+    uniqueCards,
+    legendaryCount,
+    epicCount,
+    collectionProgress: 0, // We can calculate this if needed
+  };
+}
+
 // Type for valid rarity values - includes "all" for filtering
 type ValidRarity = "common" | "rare" | "epic" | "legendary";
 type Rarity = ValidRarity | "all";
@@ -31,7 +53,7 @@ export default function CollectionClient({ userCards }: CollectionClientProps) {
   const [sortOption, setSortOption] = useState<SortOption>("rarity");
   const [filteredRarity, setFilteredRarity] = useState<Rarity>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const cardsPerPage = 8;
+  const cardsPerPage = 6;
 
   // Filter and sort logic
   const filteredCards = useMemo(
@@ -78,8 +100,38 @@ export default function CollectionClient({ userCards }: CollectionClientProps) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Calculate collection stats
+  const stats = useMemo(() => getCollectionStats(userCards), [userCards]);
+
   return (
     <div>
+      {/* Collection Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+          <span className="text-sm text-muted-foreground">Collection</span>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold">{stats.uniqueCards}</span>
+            <span className="text-sm text-muted-foreground">
+              / {stats.totalCards}
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+          <span className="text-sm text-muted-foreground">Legendary</span>
+          <div className="flex items-center gap-1">
+            <span className="text-2xl font-bold">{stats.legendaryCount}</span>
+            <StarIcon size={16} className="text-amber-500" />
+          </div>
+        </div>
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+          <span className="text-sm text-muted-foreground">Epic</span>
+          <div className="flex items-center gap-1">
+            <span className="text-2xl font-bold">{stats.epicCount}</span>
+            <GemIcon size={16} className="text-purple-500" />
+          </div>
+        </div>
+      </div>
+
       {/* Search, Sort, and Filter Controls */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         {/* Search Input */}
