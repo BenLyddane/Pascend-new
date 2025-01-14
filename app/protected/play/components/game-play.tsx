@@ -242,8 +242,14 @@ export default function GamePlay({
               setReconnectAttempts(0);
               setError(null);
             } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-              // Only attempt reconnect if we're not already in the process and the game hasn't ended
-              if (!isReconnecting && !lastKnownState.winner) {
+              // Don't show error or attempt reconnect if game has ended
+              if (lastKnownState.winner) {
+                console.log("[GamePlay] Game ended, ignoring connection close");
+                return;
+              }
+              
+              // Only attempt reconnect if we're not already in the process
+              if (!isReconnecting) {
                 console.log(
                   `[GamePlay] Subscription ${status} for game ${gameId}`
                 );
@@ -283,19 +289,21 @@ export default function GamePlay({
                           "[GamePlay] Failed to fetch state during reconnect:",
                           error
                         );
-                        setError("Error reconnecting to game");
+                        if (mounted && !lastKnownState.winner) {
+                          setError("Error reconnecting to game");
+                        }
                         setIsReconnecting(false);
                       }
                     } else {
                       setIsReconnecting(false);
                     }
                   }, delay);
+                } else {
+                  setError(
+                    "Lost connection to game server - please refresh the page"
+                  );
+                  setIsReconnecting(false);
                 }
-              } else {
-                setError(
-                  "Lost connection to game server - please refresh the page"
-                );
-                setIsReconnecting(false);
               }
             }
           });

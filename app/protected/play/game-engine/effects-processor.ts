@@ -1,14 +1,15 @@
+import { CardEffect, GameCard } from "@/types/game.types";
+
 import {
   CardState,
   BattleEffect,
   EffectModifier,
   BattleEffectTiming,
-  CardEffect,
-  SpecialEffect,
   isValidEffectType,
   isValidEffectIcon,
   EffectType,
   EffectIcon,
+  SpecialEffect,
 } from "./types";
 import {
   TurnStartEffect,
@@ -40,6 +41,7 @@ export class EffectsProcessor {
       case "on_turn_start":
         return "turn_start";
       case "on_attack":
+      case "on_battle_start":  // Map battle start effects to pre-combat phase
         return "pre_combat";
       case "on_damage_received":
         return "combat";
@@ -61,13 +63,19 @@ export class EffectsProcessor {
 
     return card.card.special_effects
       .filter((effect): effect is SpecialEffect => {
+        if (!effect || typeof effect !== 'object') return false;
+        const effectObj = effect as Partial<SpecialEffect>;
         return (
-          effect &&
-          typeof effect === 'object' &&
-          'effect_type' in effect &&
-          'effect_icon' in effect &&
-          isValidEffectType(effect.effect_type) &&
-          isValidEffectIcon(effect.effect_icon)
+          'name' in effectObj &&
+          'description' in effectObj &&
+          'effect_type' in effectObj &&
+          'effect_icon' in effectObj &&
+          'value' in effectObj &&
+          typeof effectObj.name === 'string' &&
+          typeof effectObj.description === 'string' &&
+          isValidEffectType(effectObj.effect_type as string) &&
+          isValidEffectIcon(effectObj.effect_icon as string) &&
+          typeof effectObj.value === 'number'
         );
       });
   }
@@ -158,11 +166,25 @@ export class EffectsProcessor {
             console.log("Card modifier:", card.card.modifier);
             // If we have a custom description from the card's special effects, use it
             if (specialEffect?.description) {
-              const finalDescription = specialEffect.description.replace(
+              let finalDescription = specialEffect.description;
+              // Replace {value} with effect value
+              finalDescription = finalDescription.replace(
                 /{value}/g,
                 effect.value.toString()
               );
+              // Replace {modifier} with card's modifier
+              finalDescription = finalDescription.replace(
+                /{modifier}/g,
+                card.card.modifier?.toString() || "0"
+              );
               result.battleEffect.description = `${specialEffect.name}: ${finalDescription}`;
+              // Add source card information
+              result.battleEffect.sourceCard = card.card.name;
+            }
+
+            // Ensure we have source card info even for non-special effects
+            if (!result.battleEffect.sourceCard) {
+              result.battleEffect.sourceCard = card.card.name;
             }
 
             effects.specialEffects.push(result.battleEffect);

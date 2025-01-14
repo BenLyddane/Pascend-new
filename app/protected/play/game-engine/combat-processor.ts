@@ -11,9 +11,11 @@ export class CombatProcessor {
   processCombat(
     attacker: CardState,
     defender: CardState,
-    logEntry: BattleLogEntry
+    logEntry: BattleLogEntry,
+    isCounterAttack: boolean = false
   ): void {
     console.log("\n--- Processing Combat Phase ---");
+    console.log(`${isCounterAttack ? "Counter-attack" : "Attack"} by ${attacker.card.name}`);
 
     // Get pre-combat and combat effects for damage calculation
     const preCombatEffects = this.effectsProcessor.processSpecialAbilities(
@@ -46,7 +48,13 @@ export class CombatProcessor {
     );
     console.log("Calculated Damage:", damage);
     this.damageCalculator.applyDamage(defender, damage);
-    logEntry.defender.damage = damage;
+
+    // Update damage values based on whether this is a counter-attack
+    if (isCounterAttack) {
+      logEntry.attacker.damage = damage;
+    } else {
+      logEntry.defender.damage = damage;
+    }
 
     // Update power values in log entry - use calculated values
     const attackerFinalPower = attacker.card.power + 
@@ -57,8 +65,13 @@ export class CombatProcessor {
       allEffects.defenderEffects.reduce((total, effect) => 
         effect.type === "power_reduction" ? total + effect.value : total, 0));
 
-    logEntry.attacker.endPower = attackerFinalPower;
-    logEntry.defender.endPower = defenderFinalPower;
+    if (isCounterAttack) {
+      logEntry.defender.endPower = attackerFinalPower;
+      logEntry.attacker.endPower = defenderFinalPower;
+    } else {
+      logEntry.attacker.endPower = attackerFinalPower;
+      logEntry.defender.endPower = defenderFinalPower;
+    }
 
     // Reset power values to their base values after combat
     attacker.power = attacker.card.power;

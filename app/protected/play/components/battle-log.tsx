@@ -77,9 +77,18 @@ export default function BattleLog({
   player1Name,
   player2Name,
 }: BattleLogProps) {
-  const renderEffect = (effect: BattleEffect, index: number) => {
+  // Filter out transitional entries (those with "No Card")
+  const combatEntries = entries.filter(
+    (entry) =>
+      entry.attacker.card.name !== "No Card" &&
+      entry.defender.card.name !== "No Card"
+  );
+  const renderEffect = (effect: BattleEffect, index: number, entry: BattleLogEntry) => {
     const timing = effect.timing || "combat";
-    const style = effectStyles[timing];
+    const style =
+      timing in effectStyles
+        ? effectStyles[timing as keyof typeof effectStyles]
+        : effectStyles.error;
     const icon = effect.icon
       ? effectIcons[effect.icon as keyof typeof effectIcons] || effect.icon
       : style.defaultIcon;
@@ -90,6 +99,22 @@ export default function BattleLog({
       .join(" ");
     if (effect.type === "hit") label = "Combat";
     if (effect.type === "defeat") label = "Defeat";
+
+    // Process description to include card name and replace modifiers
+    let description = effect.description;
+    
+    // Replace {modifier} with actual card modifier value
+    if (description.includes("{modifier}")) {
+      const sourceCard = entry.attacker.card.name === effect.sourceCard 
+        ? entry.attacker.card 
+        : entry.defender.card;
+      description = description.replace(/{modifier}/g, sourceCard.modifier?.toString() || "0");
+    }
+
+    // Add source card name if not already present
+    if (effect.sourceCard && !description.includes(effect.sourceCard)) {
+      description = `[${effect.sourceCard}] ${description}`;
+    }
 
     return (
       <div
@@ -103,7 +128,7 @@ export default function BattleLog({
         <span className={cn("font-semibold", style.text)}>
           {icon} {label}:
         </span>
-        <span className="text-muted-foreground">{effect.description}</span>
+        <span className="text-muted-foreground">{description}</span>
       </div>
     );
   };
@@ -113,7 +138,7 @@ export default function BattleLog({
       <h4 className="font-semibold mb-4">Battle Log</h4>
       <ScrollArea className="h-[calc(100vh-8rem)]">
         <div className="space-y-4">
-          {entries.map((entry: BattleLogEntry, index: number) => (
+          {combatEntries.map((entry: BattleLogEntry, index: number) => (
             <Card
               key={index}
               className={cn(
@@ -259,7 +284,7 @@ export default function BattleLog({
                   ...entry.effects.filter((e) => e.timing === "turn_end"),
                   ...entry.effects.filter((e) => e.timing === "on_death"),
                   ...entry.effects.filter((e) => e.timing === "game_end"),
-                ].map((effect, i) => renderEffect(effect, i))}
+                ].map((effect, i) => renderEffect(effect, i, entry))}
               </div>
             </Card>
           ))}

@@ -257,10 +257,8 @@ export class ServerGameEngine {
       // Process end of turn effects
       const { attacker, defender } = this.battleManager.getCurrentBattlers();
       if (attacker && defender) {
-        const logEntry = this.battleManager.processTurn();
-        if (logEntry) {
-          this.gameState.battleLog.push(logEntry);
-        }
+        // BattleLogger already adds the entry to gameState.battleLog
+        this.battleManager.processTurn();
       }
 
       // Update game state

@@ -1,10 +1,14 @@
 import { GameState, CardState } from "./types";
+import { BattleLogger } from "./battle-logger";
 
 export class BattleStateManager {
   private readonly STATE_HISTORY_SIZE = 20;
   private stateHistory: string[] = [];
+  private battleLogger: BattleLogger;
 
-  constructor(private gameState: GameState) {}
+  constructor(private gameState: GameState) {
+    this.battleLogger = new BattleLogger(gameState);
+  }
 
   checkForInfiniteLoop(attacker: CardState, defender: CardState): boolean {
     // Create a state snapshot that includes all relevant battle information
@@ -101,13 +105,28 @@ export class BattleStateManager {
         if (!attackerCards[currentIndex].isDefeated) {
           this.gameState.currentBattle[attackerIndex] = currentIndex;
           foundNextCard = true;
-          console.log(`Found next ${isPlayer1Attacker ? 'Player 1' : 'Player 2'} card:`, attackerCards[currentIndex].card.name);
+          const player = isPlayer1Attacker ? 'Player 1' : 'Player 2';
+          console.log(`Found next ${player} card:`, attackerCards[currentIndex].card.name);
+          this.battleLogger.logStateTransition(
+            this.gameState.currentTurn,
+            `Advanced to next ${player} card: ${attackerCards[currentIndex].card.name}`,
+            {
+              previousState: `${attackerCards[startIndex].card.name} (defeated)`,
+              newState: attackerCards[currentIndex].card.name
+            }
+          );
           break;
         }
       } while (currentIndex !== startIndex);
       
       if (!foundNextCard) {
-        console.log(`No more cards available for ${isPlayer1Attacker ? 'Player 1' : 'Player 2'}`);
+        const player = isPlayer1Attacker ? 'Player 1' : 'Player 2';
+        console.log(`No more cards available for ${player}`);
+        this.battleLogger.logStateTransition(
+          this.gameState.currentTurn,
+          `No more cards available for ${player}`,
+          { previousState: "searching", newState: "game_end" }
+        );
         this.checkGameEnd();
         return;
       }

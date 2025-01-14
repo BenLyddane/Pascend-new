@@ -17,7 +17,8 @@ export type EffectType =
   | "on_damage_received"
   | "on_damage_dealt"
   | "on_turn_end"
-  | "on_death";
+  | "on_death"
+  | "on_battle_start";
 
 export type EffectIcon =
   | "Bomb"
@@ -88,7 +89,8 @@ export type BattleEffectTiming =
   | "turn_end"
   | "on_death"
   | "game_end"
-  | "error";
+  | "error"
+  | "state_transition";
 
 // Entry in the battle log
 export interface BattleLogEntry {
@@ -113,10 +115,23 @@ export interface BattleLogEntry {
 }
 
 export interface BattleEffect {
-  type: "hit" | "special" | "stat" | "defeat" | "game_end" | "error";
+  type:
+    | "hit"
+    | "special"
+    | "stat"
+    | "defeat"
+    | "game_end"
+    | "error"
+    | "state_change";
   description: string;
   icon?: string;
   timing?: BattleEffectTiming;
+  sourceCard?: string; // Name of the card that triggered this effect
+  details?: {
+    reason?: string;
+    previousState?: string;
+    newState?: string;
+  };
 }
 
 // Overall game state
@@ -181,6 +196,7 @@ export function isValidEffectType(type: string): type is EffectType {
     "on_damage_dealt",
     "on_turn_end",
     "on_death",
+    "on_battle_start",
   ].includes(type as EffectType);
 }
 
@@ -200,13 +216,13 @@ export function isValidEffectIcon(icon: string): icon is EffectIcon {
 export function convertToGameCard(card: CardWithEffects): GameCard {
   return {
     ...card,
-    gameplay_effects: card.special_effects.map(effect => ({
+    gameplay_effects: card.special_effects.map((effect) => ({
       name: effect.name,
       description: effect.description,
       effect_type: effect.effect_type as EffectType,
       effect_icon: effect.effect_icon as EffectIcon,
-      value: effect.value
-    }))
+      value: effect.value,
+    })),
   };
 }
 
@@ -243,13 +259,13 @@ export function toVisibleCardState(cardState: CardState): VisibleCardState {
     maxHealth: cardState.maxHealth,
     power: cardState.power,
     isDefeated: cardState.isDefeated,
-    activeEffects: cardState.effects.map(effect => ({
+    activeEffects: cardState.effects.map((effect) => ({
       name: effect.name,
       description: effect.description,
       effect_type: effect.effect_type,
       effect_icon: effect.effect_icon,
-      value: effect.value
-    }))
+      value: effect.value,
+    })),
   };
 }
 
@@ -275,7 +291,7 @@ export function parseGameplayEffects(special_effects: Json): CardEffect[] {
       description: effect.description,
       effect_type: effect.effect_type,
       effect_icon: effect.effect_icon,
-      value: effect.value
+      value: effect.value,
     }));
   } catch (error) {
     console.error("Error parsing gameplay effects:", error);
