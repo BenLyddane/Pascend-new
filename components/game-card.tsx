@@ -10,18 +10,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Database } from "@/types/database.types";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
 import { cn } from "@/lib/utils";
 
-type DbCard = Database["public"]["Tables"]["cards"]["Row"];
-type SpecialEffect = Database["public"]["Tables"]["special_properties"]["Row"];
-
-interface Card extends DbCard {
-  effects?: ("Explosive" | "Offensive" | "Defensive")[];
-}
+type LegacyEffect = "Explosive" | "Offensive" | "Defensive";
 
 interface GameCardProps {
-  card: Card;
+  card: CardWithEffects & {
+    effects?: LegacyEffect[];
+  };
   onClick?: () => void;
   className?: string;
 }
@@ -115,72 +112,16 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
 
   type EffectTuple = [string, string, string, number];
 
-  const effects = (() => {
-    if (!card.special_effects) return [] as EffectTuple[];
-
-    try {
-      if (typeof card.special_effects === "string") {
-        const parsed = JSON.parse(card.special_effects);
-        return Array.isArray(parsed)
-          ? parsed
-              .map((effect) => {
-                if (!effect || typeof effect !== "object") return null;
-                const effectType = inferEffectType(
-                  effect.name,
-                  effect.description
-                );
-                return [
-                  effectType,
-                  effect.name,
-                  effect.description,
-                  effect.value || 0,
-                ] as EffectTuple;
-              })
-              .filter((effect): effect is EffectTuple => effect !== null)
-          : [];
-      }
-
-      if (Array.isArray(card.special_effects)) {
-        return card.special_effects
-          .map((effect: any) => {
-            if (!effect || typeof effect !== "object") return null;
-
-            if (Array.isArray(effect) && effect.length === 4) {
-              const [type, name, desc, val] = effect;
-              if (
-                typeof type === "string" &&
-                typeof name === "string" &&
-                typeof desc === "string" &&
-                (typeof val === "number" || val === null)
-              ) {
-                return [type, name, desc, val || 0] as EffectTuple;
-              }
-            }
-
-            if ("name" in effect && "description" in effect) {
-              const effectType = inferEffectType(
-                effect.name,
-                effect.description
-              );
-              return [
-                effectType,
-                effect.name,
-                effect.description,
-                effect.value || 0,
-              ] as EffectTuple;
-            }
-
-            return null;
-          })
-          .filter((effect): effect is EffectTuple => effect !== null);
-      }
-
-      return [] as EffectTuple[];
-    } catch (error) {
-      console.error("Error processing special effects:", error);
-      return [] as EffectTuple[];
-    }
-  })();
+  // Transform special effects into tuple format
+  const effects: EffectTuple[] = (card.special_effects || []).map(effect => {
+    const effectType = inferEffectType(effect.name, effect.description);
+    return [
+      effectType,
+      effect.name,
+      effect.description,
+      effect.value
+    ] as EffectTuple;
+  });
 
   function inferEffectType(name: string, description: string): EffectType {
     const text = (name + " " + description).toLowerCase();

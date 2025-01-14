@@ -21,7 +21,7 @@ export class DeathEffect implements EffectProcessor {
         battleEffect: createBattleEffect(
           'Bomb',
           'on_death',
-          `${effectName}: ${card.card.name} dealt ${modifiedValue} explosion damage (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} dealt ${modifiedValue} explosion damage`
         )
       };
     }

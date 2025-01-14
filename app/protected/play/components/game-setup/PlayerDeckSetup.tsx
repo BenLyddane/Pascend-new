@@ -1,6 +1,6 @@
 "use client";
 
-import { Card } from "@/app/protected/play/game-engine/types";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
 import { GameModeConfig } from "../../game-modes/types";
 import { GameCardPractice } from "@/components/game-card-practice";
 import { GameCard } from "@/components/game-card";
@@ -8,9 +8,9 @@ import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 type PlayerDeckSetupProps = {
-  cards: Card[];
-  bannedCards: Card[];
-  onCardBan: (card: Card) => void;
+  cards: CardWithEffects[];
+  bannedCards: CardWithEffects[];
+  onCardBan: (card: CardWithEffects) => void;
   onCardReorder: (dragIndex: number, dropIndex: number) => void;
   onPhaseComplete: () => void;
   isReady: boolean;

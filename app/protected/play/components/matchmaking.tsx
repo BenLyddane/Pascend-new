@@ -2,13 +2,51 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { GameCard, UiCard, convertToGameCard } from "@/app/protected/play/game-engine/types";
-import { Database } from "@/types/database.types";
+import { MatchmakingEntry, MatchmakingStatus, GameDeck, DeckWithCards, CardEffect } from "@/types/game.types";
 
-type MatchmakingEntry = Database['public']['Tables']['matchmaking_queue']['Row'];
-type MatchmakingStatus = 'waiting' | 'matched' | 'in_game' | 'completed';
-type Deck = Database['public']['Tables']['player_decks']['Row'] & {
-  cards: GameCard[];
-};
+interface GameStats {
+  totalDamageDealt: number;
+  cardsDefeated: number;
+  turnsPlayed: number;
+  specialAbilitiesUsed: number;
+}
+
+interface Opponent {
+  id: string;
+  name: string;
+  deck: GameDeck;
+}
+
+function convertToGameDeck(deck: DeckWithCards): GameDeck {
+  const gameCards = deck.cards.map(card => ({
+    ...card,
+    gameplay_effects: (card.special_effects ?? []).map(effect => ({
+      name: effect.name,
+      description: effect.description,
+      effect_type: effect.effect_type,
+      effect_icon: effect.effect_icon,
+      value: effect.value ?? 0
+    }))
+  })) as GameCard[];
+
+  return {
+    id: deck.id,
+    name: deck.name,
+    description: deck.description ?? null,
+    user_id: deck.user_id,
+    created_at: deck.created_at ?? null,
+    deck_type: deck.deck_type,
+    is_active: deck.is_active ?? true,
+    last_used_at: deck.last_used_at ?? null,
+    losses: deck.losses ?? 0,
+    template_id: deck.template_id ?? null,
+    total_matches: deck.total_matches ?? 0,
+    updated_at: deck.updated_at ?? null,
+    wins: deck.wins ?? 0,
+    cards: gameCards
+  };
+}
+
 import { createClient } from "@/utils/supabase/client";
 import {
   createQueueEntry,
@@ -24,13 +62,9 @@ type MatchState = "selecting" | "queuing" | "setup" | "playing";
 
 export default function Matchmaking() {
   const [matchState, setMatchState] = useState<MatchState>("selecting");
-  const [selectedDeck, setSelectedDeck] = useState<Deck | null>(null);
+  const [selectedDeck, setSelectedDeck] = useState<GameDeck | null>(null);
   const [queueEntry, setQueueEntry] = useState<MatchmakingEntry | null>(null);
-  const [opponent, setOpponent] = useState<{
-    id: string;
-    name: string;
-    deck: Deck;
-  } | null>(null);
+  const [opponent, setOpponent] = useState<Opponent | null>(null);
   const [gameCards, setGameCards] = useState<{
     player1Cards: GameCard[];
     player2Cards: GameCard[];
@@ -49,6 +83,8 @@ export default function Matchmaking() {
 
     try {
       const entry = await createQueueEntry(selectedDeck.id);
+      if (!entry) throw new Error("Failed to create queue entry");
+      
       setQueueEntry(entry);
       setMatchState("queuing");
       startMatchmaking(entry);
@@ -96,7 +132,7 @@ export default function Matchmaking() {
               .eq("id", updatedEntry.opponent_deck_id)
               .single();
 
-            if (opponentError) {
+            if (opponentError || !opponentData) {
               console.error("Error fetching opponent:", opponentError);
               return;
             }
@@ -208,7 +244,7 @@ export default function Matchmaking() {
     }
   };
 
-  const handleGameEnd = async (winner: 1 | 2 | "draw", stats: any) => {
+  const handleGameEnd = async (winner: 1 | 2 | "draw", stats: GameStats) => {
     if (!queueEntry) return;
 
     try {
@@ -237,15 +273,15 @@ export default function Matchmaking() {
         .eq("user_id", user.id)
         .single();
 
-      if (statsError) throw statsError;
+      if (statsError || !playerStats) throw statsError;
 
       // Calculate new stats
       const newStats = {
-        total_matches: (playerStats?.total_matches || 0) + 1,
-        wins: (playerStats?.wins || 0) + (winner === 1 ? 1 : 0),
-        losses: (playerStats?.losses || 0) + (winner === 2 ? 1 : 0),
+        total_matches: (playerStats.total_matches ?? 0) + 1,
+        wins: (playerStats.wins ?? 0) + (winner === 1 ? 1 : 0),
+        losses: (playerStats.losses ?? 0) + (winner === 2 ? 1 : 0),
         rank_points:
-          (playerStats?.rank_points || 1000) +
+          (playerStats.rank_points ?? 1000) +
           (winner === 1 ? 25 : winner === 2 ? -20 : 0),
       };
 
@@ -302,7 +338,7 @@ export default function Matchmaking() {
         <DeckSelector
           label="Select Your Deck"
           selectedDeck={selectedDeck}
-          onDeckSelect={setSelectedDeck}
+          onDeckSelect={(deck) => setSelectedDeck(convertToGameDeck(deck))}
         />
 
         <div className="flex justify-center">

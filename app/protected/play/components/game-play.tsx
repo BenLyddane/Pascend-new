@@ -242,8 +242,8 @@ export default function GamePlay({
               setReconnectAttempts(0);
               setError(null);
             } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
-              // Only attempt reconnect if we're not already in the process
-              if (!isReconnecting) {
+              // Only attempt reconnect if we're not already in the process and the game hasn't ended
+              if (!isReconnecting && !lastKnownState.winner) {
                 console.log(
                   `[GamePlay] Subscription ${status} for game ${gameId}`
                 );
@@ -261,7 +261,7 @@ export default function GamePlay({
 
                   // Wait before attempting to reconnect
                   setTimeout(async () => {
-                    if (mounted) {
+                    if (mounted && !lastKnownState.winner) {
                       try {
                         // Clean up existing subscription
                         if (currentChannel) {
@@ -271,10 +271,12 @@ export default function GamePlay({
 
                         // Fetch latest state before resubscribing
                         const currentState = await fetchCurrentState();
-                        if (mounted) {
+                        if (mounted && !currentState.winner) {
                           setGameState(currentState);
                           lastKnownState = currentState;
                           setupSubscription().catch(console.error);
+                        } else {
+                          setIsReconnecting(false);
                         }
                       } catch (error) {
                         console.error(
@@ -284,6 +286,8 @@ export default function GamePlay({
                         setError("Error reconnecting to game");
                         setIsReconnecting(false);
                       }
+                    } else {
+                      setIsReconnecting(false);
                     }
                   }, delay);
                 }

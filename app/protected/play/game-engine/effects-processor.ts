@@ -1,14 +1,10 @@
 import {
-  GameCard,
   CardState,
   BattleEffect,
   EffectModifier,
   BattleEffectTiming,
   CardEffect,
   SpecialEffect,
-  JsonSpecialEffect,
-  isJsonObject,
-  hasEffectProperties,
   isValidEffectType,
   isValidEffectIcon,
   EffectType,
@@ -39,7 +35,7 @@ export class EffectsProcessor {
     this.gameStats = gameStats;
   }
 
-  private getEffectTiming(effectType: string): BattleEffectTiming {
+  private getEffectTiming(effectType: EffectType): BattleEffectTiming {
     switch (effectType) {
       case "on_turn_start":
         return "turn_start";
@@ -59,29 +55,21 @@ export class EffectsProcessor {
   }
 
   private getSpecialEffects(card: CardState): SpecialEffect[] {
-    if (!card.card.special_effects || !Array.isArray(card.card.special_effects))
+    if (!card.card.special_effects || !Array.isArray(card.card.special_effects)) {
       return [];
+    }
 
     return card.card.special_effects
-      .filter(isJsonObject)
-      .filter(hasEffectProperties)
-      .filter(
-        (
-          effect
-        ): effect is JsonSpecialEffect & {
-          effect_type: EffectType;
-          effect_icon: EffectIcon;
-        } =>
+      .filter((effect): effect is SpecialEffect => {
+        return (
+          effect &&
+          typeof effect === 'object' &&
+          'effect_type' in effect &&
+          'effect_icon' in effect &&
           isValidEffectType(effect.effect_type) &&
           isValidEffectIcon(effect.effect_icon)
-      )
-      .map((effect) => ({
-        name: effect.name,
-        description: effect.description,
-        effect_type: effect.effect_type,
-        effect_icon: effect.effect_icon,
-        value: effect.value,
-      }));
+        );
+      });
   }
 
   processSpecialAbilities(
@@ -115,16 +103,17 @@ export class EffectsProcessor {
 
     // Helper function to process effects for a card
     const processCardEffects = (card: CardState, isAttacker: boolean) => {
-      if (!card.effects) {
+      const cardEffects = card.card.gameplay_effects;
+      if (!cardEffects || cardEffects.length === 0) {
         console.log(`No effects found for ${card.card.name}`);
         return;
       }
       console.log(
         `Processing effects for ${card.card.name}:`,
-        card.effects
+        cardEffects
       );
 
-      card.effects.forEach((effect: CardEffect) => {
+      cardEffects.forEach((effect: CardEffect) => {
         this.gameStats.specialAbilitiesUsed++;
 
         // Get effect details from card's special_effects
@@ -137,6 +126,10 @@ export class EffectsProcessor {
           console.log("Matched special effect:", specialEffect);
         }
 
+        if (!isValidEffectType(effect.effect_type)) {
+          console.log(`Invalid effect type: ${effect.effect_type}`);
+          return;
+        }
         const expectedTiming = this.getEffectTiming(effect.effect_type);
         if (expectedTiming !== timing) {
           console.log(

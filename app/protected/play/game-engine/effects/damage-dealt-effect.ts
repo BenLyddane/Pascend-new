@@ -23,7 +23,7 @@ export class DamageDealtEffect implements EffectProcessor {
           battleEffect: createBattleEffect(
             'Heart',
             'post_combat',
-            `${effectName}: ${card.card.name} healed for ${healAmount} HP (${effect.value} × ${card.card.modifier || 1} modifier)`
+            `${effectName}: ${card.card.name} healed for ${healAmount} HP`
           )
         };
       }

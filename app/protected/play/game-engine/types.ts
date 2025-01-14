@@ -1,16 +1,13 @@
 import { Database, Json } from "@/types/database.types";
+import { CardEffect, CardWithEffects } from "@/types/game.types";
 
-// Base card type from database
-export type DbCard = Database["public"]["Tables"]["cards"]["Row"];
+// Re-export types from game.types.ts
+export type { CardEffect, CardWithEffects };
 
-// Game action types for server communication
-export interface GameAction {
-  type: "PLAY_CARD" | "USE_EFFECT" | "END_TURN";
-  payload: {
-    cardId?: string;
-    targetId?: string;
-    effectIndex?: number;
-  };
+// Effect modifier types
+export interface EffectModifier {
+  type: "power_boost" | "power_reduction";
+  value: number;
 }
 
 // Effect types
@@ -35,50 +32,29 @@ export type EffectIcon =
 export type DisplayEffect = "Explosive" | "Offensive" | "Defensive";
 
 // UI card interface (used by components)
-export interface UiCard extends DbCard {
+export interface UiCard extends CardWithEffects {
   effects?: DisplayEffect[];
 }
 
-// Database special property type
-export interface SpecialProperty {
-  id: string;
-  name: string;
-  description: string;
-  effect_type: string;
-  effect_icon: string;
-  value: number | null;
-  power_level: number | null;
-  rarity_modifier: number[] | null;
-  allowed_rarities: string[] | null;
-  combo_tags: string[] | null;
-  created_at: string;
-}
-
 // Special effect structure (type-safe version)
-export interface SpecialEffect {
-  name: string;
-  description: string;
+export interface SpecialEffect extends CardEffect {
   effect_type: EffectType;
   effect_icon: EffectIcon;
-  value: number;
 }
 
-// Card effect structure for gameplay
-export interface CardEffect {
-  effect_type: EffectType;
-  effect_icon: EffectIcon;
-  value: number;
-}
-
-// Game engine card type
-export interface GameCard extends DbCard {
+// Game card type
+export interface GameCard extends CardWithEffects {
   gameplay_effects: CardEffect[];
 }
 
-// Effect modifier types
-export interface EffectModifier {
-  type: "power_boost" | "power_reduction";
-  value: number;
+// Game action types for server communication
+export interface GameAction {
+  type: "PLAY_CARD" | "USE_EFFECT" | "END_TURN";
+  payload: {
+    cardId?: string;
+    targetId?: string;
+    effectIndex?: number;
+  };
 }
 
 // State of a card during gameplay
@@ -100,10 +76,7 @@ export interface VisibleCardState {
   maxHealth: number;
   power: number;
   isDefeated: boolean;
-  activeEffects: {
-    effect_type: EffectType;
-    effect_icon: EffectIcon;
-  }[];
+  activeEffects: CardEffect[];
 }
 
 // Battle effect timing types
@@ -224,15 +197,16 @@ export function isValidEffectIcon(icon: string): icon is EffectIcon {
 }
 
 // Helper function to convert UI card to game engine card
-export function convertToGameCard(card: DbCard): GameCard {
-  // Parse special_effects if it's a string
-  const parsedEffects = typeof card.special_effects === 'string' 
-    ? JSON.parse(card.special_effects)
-    : card.special_effects;
-
+export function convertToGameCard(card: CardWithEffects): GameCard {
   return {
     ...card,
-    gameplay_effects: parseGameplayEffects(parsedEffects),
+    gameplay_effects: card.special_effects.map(effect => ({
+      name: effect.name,
+      description: effect.description,
+      effect_type: effect.effect_type as EffectType,
+      effect_icon: effect.effect_icon as EffectIcon,
+      value: effect.value
+    }))
   };
 }
 
@@ -270,83 +244,41 @@ export function toVisibleCardState(cardState: CardState): VisibleCardState {
     power: cardState.power,
     isDefeated: cardState.isDefeated,
     activeEffects: cardState.effects.map(effect => ({
+      name: effect.name,
+      description: effect.description,
       effect_type: effect.effect_type,
-      effect_icon: effect.effect_icon
+      effect_icon: effect.effect_icon,
+      value: effect.value
     }))
   };
 }
 
 export function parseGameplayEffects(special_effects: Json): CardEffect[] {
-  console.log("\n=== Parsing Gameplay Effects ===");
-  console.log(
-    "Input special_effects:",
-    JSON.stringify(special_effects, null, 2)
-  );
-
   if (!special_effects || !Array.isArray(special_effects)) {
-    console.log("No special effects found or not an array");
     return [];
   }
 
   try {
     const jsonObjects = special_effects.filter(isJsonObject);
-    console.log(
-      "After isJsonObject filter:",
-      JSON.stringify(jsonObjects, null, 2)
-    );
-
-    console.log("Checking each object for effect properties:");
-    const withProperties = jsonObjects.filter((obj) => {
-      console.log("Checking object:", obj);
-      console.log("Has effect_type:", typeof obj.effect_type === "string");
-      console.log("Has effect_icon:", typeof obj.effect_icon === "string");
-      console.log("Has value:", typeof obj.value === "number");
-      console.log("Has name:", typeof obj.name === "string");
-      console.log("Has description:", typeof obj.description === "string");
-      return hasEffectProperties(obj);
-    });
-    console.log(
-      "After hasEffectProperties filter:",
-      JSON.stringify(withProperties, null, 2)
-    );
-
-    console.log("Validating effect types and icons:");
+    const withProperties = jsonObjects.filter(hasEffectProperties);
     const validEffects = withProperties.filter((effect) => {
-      console.log("Validating effect:", effect);
       const validType = isValidEffectType(effect.effect_type);
       const validIcon = isValidEffectIcon(effect.effect_icon);
-      console.log("Valid type:", validType, "Valid icon:", validIcon);
       return validType && validIcon;
     }) as (JsonSpecialEffect & {
       effect_type: EffectType;
       effect_icon: EffectIcon;
     })[];
-    console.log(
-      "After type validation filter:",
-      JSON.stringify(validEffects, null, 2)
-    );
 
-    const cardEffects = validEffects.map((effect) => {
-      const cardEffect = {
-        effect_type: effect.effect_type,
-        effect_icon: effect.effect_icon,
-        value: effect.value,
-      };
-      console.log("Created card effect:", cardEffect);
-      return cardEffect;
-    });
-    console.log("Final card effects:", JSON.stringify(cardEffects, null, 2));
-
-    return cardEffects;
-  } catch (error: unknown) {
+    return validEffects.map((effect) => ({
+      name: effect.name,
+      description: effect.description,
+      effect_type: effect.effect_type,
+      effect_icon: effect.effect_icon,
+      value: effect.value
+    }));
+  } catch (error) {
     console.error("Error parsing gameplay effects:", error);
-    if (error instanceof Error) {
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
-    }
     return [];
   }
 }

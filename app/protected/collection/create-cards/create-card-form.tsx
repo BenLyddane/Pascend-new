@@ -27,13 +27,38 @@ import { generateCards } from "@/app/actions/generateCards";
 import { keepCard } from "@/app/actions/keepCard";
 import { ClientTempCardCarousel } from "./temp-card-carousel";
 import { TempCard, CardStyle } from "@/types/game.types";
-import type { Database } from "@/types/database.types";
+import type { Database, Json } from "@/types/database.types";
 import { GameCard } from "@/components/game-card";
-
-type Card = Database["public"]["Tables"]["cards"]["Row"];
-type SpecialEffect = Database["public"]["Tables"]["special_properties"]["Row"];
 import { Loader2, Wand2 } from "lucide-react";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
+import { BaseCardEffect } from "@/types/game.types";
 import { Textarea } from "@/components/ui/textarea";
+
+function convertToBaseCardEffects(effects: Json | null): BaseCardEffect[] {
+  if (!effects || !Array.isArray(effects)) return [];
+  return effects
+    .map(effect => {
+      if (!effect || typeof effect !== 'object') return null;
+      const obj = effect as Record<string, unknown>;
+      if (
+        typeof obj.name === 'string' &&
+        typeof obj.description === 'string' &&
+        typeof obj.effect_type === 'string' &&
+        typeof obj.effect_icon === 'string' &&
+        (typeof obj.value === 'number' || obj.value === null)
+      ) {
+        return {
+          name: obj.name,
+          description: obj.description,
+          effect_type: obj.effect_type,
+          effect_icon: obj.effect_icon,
+          value: obj.value ?? 0
+        };
+      }
+      return null;
+    })
+    .filter((effect): effect is BaseCardEffect => effect !== null);
+}
 
 const CARD_STYLES: CardStyle[] = [
   "Pixel Art",
@@ -349,14 +374,14 @@ export default function CreateCardForm({
                       New
                     </div>
                     <GameCard 
-                      card={{
-                        ...card,
-                        edition: "standard",
-                        is_active: true,
-                        keywords: [],
-                        user_id: userId,
-                        special_effects: card.special_effects
-                      }}
+              card={{
+                ...card,
+                edition: "standard",
+                is_active: true,
+                keywords: [],
+                user_id: userId,
+                special_effects: convertToBaseCardEffects(card.special_effects)
+              } satisfies CardWithEffects}
                     />
                   </div>
                   <Button

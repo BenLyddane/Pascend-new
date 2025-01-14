@@ -25,7 +25,7 @@ export class AttackEffect implements EffectProcessor {
         result.battleEffect = createBattleEffect(
           'Sword',
           'pre_combat',
-          `${effectName}: ${card.card.name}'s attack power increased by ${modifiedValue} (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name}'s attack power increased by ${modifiedValue}`
         );
         break;
 
@@ -34,7 +34,7 @@ export class AttackEffect implements EffectProcessor {
         result.battleEffect = createBattleEffect(
           'Shield',
           'pre_combat',
-          `${effectName}: ${card.card.name} reduces incoming damage by ${modifiedValue} (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} reduces incoming damage by ${modifiedValue}`
         );
         break;
     }

@@ -34,7 +34,7 @@ export class TurnStartEffect implements EffectProcessor {
         battleEffect: createBattleEffect(
           'Flame',
           'turn_start',
-          `${effectName}: ${card.card.name} takes ${damage} burn damage (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} takes ${damage} burn damage`
         )
       };
     }
@@ -50,7 +50,7 @@ export class TurnStartEffect implements EffectProcessor {
         battleEffect: createBattleEffect(
           'RefreshCw',
           'turn_start',
-          `${effectName}: ${card.card.name} restored ${healing} health (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} restored ${healing} health`
         )
       };
     }

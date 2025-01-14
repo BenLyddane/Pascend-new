@@ -3,15 +3,8 @@
 import { useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
 import { Card, GameCard, convertToGameCard } from "@/app/protected/play/game-engine/types";
+import { Deck, MatchmakingEntry, MatchmakingStatus } from "@/types/game.types";
 import { Database } from "@/types/database.types";
-
-type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
-  cards: Card[];
-};
-
-type MatchmakingStatus = "waiting" | "matched" | "completed";
-type MatchmakingEntry =
-  Database["public"]["Tables"]["matchmaking_queue"]["Row"];
 import { createClient } from "@/utils/supabase/client";
 import DeckSelector from "./deck-selector";
 import GameSetup from "./game-setup";
@@ -21,7 +14,7 @@ type MatchState = "selecting" | "queuing" | "setup" | "playing";
 
 // Helper function to parse card list
 const parseCardList = (
-  cardList: Database["public"]["Tables"]["player_decks"]["Row"]["card_list"]
+  cardList: any
 ): Card[] => {
   if (!cardList) return [];
   try {
@@ -112,10 +105,10 @@ export default function TestMatchmaking() {
         .eq("id", queueEntry.id);
 
       // Add cards array to opponent deck
-      const deckWithCards: Deck = {
+      const deckWithCards = {
         ...opponentDeck,
         cards: parseCardList(opponentDeck.card_list),
-      };
+      } as Deck;
 
       setOpponent({
         id: "test-opponent",
@@ -287,8 +280,8 @@ export default function TestMatchmaking() {
             // Add cards array when setting selected deck
             setSelectedDeck({
               ...deck,
-              cards: parseCardList(deck.card_list),
-            });
+              cards: parseCardList((deck as any).card_list),
+            } as Deck);
           }}
         />
 

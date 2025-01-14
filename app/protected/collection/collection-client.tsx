@@ -13,22 +13,18 @@ import {
 import { GameCard } from "@/components/game-card";
 import type { Database } from "@/types/database.types";
 
-// Define types from the database schema
-type Card = Database["public"]["Tables"]["cards"]["Row"];
-type SpecialEffect = Database["public"]["Tables"]["special_properties"]["Row"];
-
-// Define the extended card type that includes special effects
-type CardWithEffects = Card & {
-  special_effects?: SpecialEffect[] | null;
-};
+import { CardWithEffects } from "@/app/actions/fetchDecks";
 
 interface CollectionClientProps {
   userCards: CardWithEffects[];
 }
 
-// Type for valid rarity values
-type Rarity = "common" | "rare" | "epic" | "legendary" | "all";
+// Type for valid rarity values - includes "all" for filtering
+type ValidRarity = "common" | "rare" | "epic" | "legendary";
+type Rarity = ValidRarity | "all";
 type SortOption = "rarity" | "name" | "power";
+
+const rarityOrder: ValidRarity[] = ["legendary", "epic", "rare", "common"];
 
 export default function CollectionClient({ userCards }: CollectionClientProps) {
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -54,16 +50,9 @@ export default function CollectionClient({ userCards }: CollectionClientProps) {
         .sort((a, b) => {
           switch (sortOption) {
             case "rarity": {
-              const rarityOrder: Rarity[] = [
-                "legendary",
-                "epic",
-                "rare",
-                "common",
-              ];
-              return (
-                rarityOrder.indexOf(a.rarity as Rarity) -
-                rarityOrder.indexOf(b.rarity as Rarity)
-              );
+              const aIndex = rarityOrder.indexOf(a.rarity as ValidRarity);
+              const bIndex = rarityOrder.indexOf(b.rarity as ValidRarity);
+              return aIndex - bIndex;
             }
             case "name":
               return a.name.localeCompare(b.name);

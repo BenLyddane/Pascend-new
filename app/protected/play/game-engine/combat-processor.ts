@@ -1,4 +1,4 @@
-import { CardState, BattleEffect, BattleLogEntry } from "./types";
+import { CardState, BattleEffect, BattleLogEntry, CardEffect, EffectType, EffectIcon } from "./types";
 import { EffectsProcessor } from "./effects-processor";
 import { DamageCalculator } from "./damage-calculator";
 
@@ -78,17 +78,17 @@ export class CombatProcessor {
       type: "hit",
       description: `${attacker.card.name} dealt ${damage} damage to ${defender.card.name}${modifierText}`,
       timing: "combat",
+      icon: "Sword"
     });
 
     // If damage was dealt, add or update Life Drain effect
     if (damage > 0) {
-      if (!attacker.effects) {
-        attacker.effects = [];
-      }
+      // Initialize effects array if it doesn't exist
+      attacker.effects = attacker.effects || [];
       
       // Find existing Life Drain effect
       const existingEffect = attacker.effects.find(
-        effect => effect.effect_type === 'on_damage_dealt' && effect.effect_icon === 'Heart'
+        (effect: CardEffect) => effect.effect_type === "on_damage_dealt" && effect.effect_icon === "Heart"
       );
       
       if (existingEffect) {
@@ -96,11 +96,14 @@ export class CombatProcessor {
         existingEffect.value += 1;
       } else {
         // Add new effect if none exists
-        attacker.effects.push({
-          effect_type: 'on_damage_dealt',
-          effect_icon: 'Heart',
+        const newEffect: CardEffect = {
+          name: "Life Drain",
+          description: "Gains power from dealing damage",
+          effect_type: "on_damage_dealt" as EffectType,
+          effect_icon: "Heart" as EffectIcon,
           value: 1
-        });
+        };
+        attacker.effects.push(newEffect);
       }
     }
   }
@@ -129,6 +132,7 @@ export class CombatProcessor {
       type: "defeat",
       description: `${defeated.card.name} was defeated!`,
       timing: "on_death",
+      icon: "Sword"
     });
   }
 }

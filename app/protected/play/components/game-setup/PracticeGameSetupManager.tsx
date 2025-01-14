@@ -1,24 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { Card } from "@/app/protected/play/game-engine/types";
-import { Database } from "@/types/database.types";
 import { GAME_MODES } from "../../game-modes/types";
 import { GameSetupInstructions } from "./GameSetupInstructions";
 import { GameSetupTimer } from "./GameSetupTimer";
 import { PlayerDeckSetup } from "./PlayerDeckSetup";
-
-type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
-  cards: Card[];
-};
+import { DeckWithCards, CardWithEffects } from "@/app/actions/fetchDecks";
 
 type PracticeGameSetupManagerProps = {
-  deck1: Deck;
-  deck2: Deck;
+  deck1: DeckWithCards;
+  deck2: DeckWithCards;
   mode: "practice";
   onSetupComplete: (
-    deck1Cards: Card[],
-    deck2Cards: Card[],
+    deck1Cards: CardWithEffects[],
+    deck2Cards: CardWithEffects[],
     player1Ready: boolean,
     player2Ready: boolean
   ) => void;
@@ -31,12 +26,12 @@ export function PracticeGameSetupManager({
   onSetupComplete,
 }: PracticeGameSetupManagerProps): React.ReactElement {
   // Track banned cards (2 per deck) and remaining cards order
-  const [bannedCards1, setBannedCards1] = useState<Card[]>([]);
-  const [bannedCards2, setBannedCards2] = useState<Card[]>([]);
-  const [remainingCards1, setRemainingCards1] = useState<Card[]>(
+  const [bannedCards1, setBannedCards1] = useState<CardWithEffects[]>([]);
+  const [bannedCards2, setBannedCards2] = useState<CardWithEffects[]>([]);
+  const [remainingCards1, setRemainingCards1] = useState<CardWithEffects[]>(
     () => deck1.cards || []
   );
-  const [remainingCards2, setRemainingCards2] = useState<Card[]>(
+  const [remainingCards2, setRemainingCards2] = useState<CardWithEffects[]>(
     () => deck2.cards || []
   );
 
@@ -46,7 +41,7 @@ export function PracticeGameSetupManager({
     player2: false
   });
 
-  const handleCardBan = (card: Card, isDeck1: boolean) => {
+  const handleCardBan = (card: CardWithEffects, isDeck1: boolean) => {
     if (isDeck1) {
       if (bannedCards1.length >= 2) return;
       setBannedCards1([...bannedCards1, card]);

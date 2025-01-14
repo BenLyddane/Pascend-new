@@ -1,3 +1,5 @@
+"use client";
+
 import Image from "next/image";
 import {
   Tooltip,
@@ -5,13 +7,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { Database } from "@/types/database.types";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
 
-type DbCard = Database["public"]["Tables"]["cards"]["Row"];
+type LegacyEffect = "Explosive" | "Offensive" | "Defensive";
 
 interface GameCardPracticeProps {
-  card: DbCard & {
-    effects?: ("Explosive" | "Offensive" | "Defensive")[];
+  card: CardWithEffects & {
+    effects?: LegacyEffect[];
   };
 }
 
@@ -95,74 +97,15 @@ export function GameCardPractice({ card }: GameCardPracticeProps) {
   type EffectTuple = [string, string, string, number];
 
   // Transform special effects into tuple format
-  const effects = (() => {
-    if (!card.special_effects) return [] as EffectTuple[];
-
-    try {
-      // Handle raw Json from database
-      if (typeof card.special_effects === "string") {
-        const parsed = JSON.parse(card.special_effects);
-        return Array.isArray(parsed)
-          ? parsed
-              .map((effect) => {
-                if (!effect || typeof effect !== "object") return null;
-                const effectType = inferEffectType(
-                  effect.name,
-                  effect.description
-                );
-                return [
-                  effectType,
-                  effect.name,
-                  effect.description,
-                  effect.value || 0,
-                ] as EffectTuple;
-              })
-              .filter((effect): effect is EffectTuple => effect !== null)
-          : [];
-      }
-
-      // Handle already parsed array
-      if (Array.isArray(card.special_effects)) {
-        return card.special_effects
-          .map((effect: any) => {
-            if (!effect || typeof effect !== "object") return null;
-
-            if (Array.isArray(effect) && effect.length === 4) {
-              const [type, name, desc, val] = effect;
-              if (
-                typeof type === "string" &&
-                typeof name === "string" &&
-                typeof desc === "string" &&
-                (typeof val === "number" || val === null)
-              ) {
-                return [type, name, desc, val || 0] as EffectTuple;
-              }
-            }
-
-            if ("name" in effect && "description" in effect) {
-              const effectType = inferEffectType(
-                effect.name,
-                effect.description
-              );
-              return [
-                effectType,
-                effect.name,
-                effect.description,
-                effect.value || 0,
-              ] as EffectTuple;
-            }
-
-            return null;
-          })
-          .filter((effect): effect is EffectTuple => effect !== null);
-      }
-
-      return [] as EffectTuple[];
-    } catch (error) {
-      console.error("Error processing special effects:", error);
-      return [] as EffectTuple[];
-    }
-  })();
+  const effects: EffectTuple[] = (card.special_effects || []).map(effect => {
+    const effectType = inferEffectType(effect.name, effect.description);
+    return [
+      effectType,
+      effect.name,
+      effect.description,
+      effect.value
+    ] as EffectTuple;
+  });
 
   function inferEffectType(name: string, description: string): EffectType {
     const text = (name + " " + description).toLowerCase();
@@ -254,8 +197,8 @@ export function GameCardPractice({ card }: GameCardPracticeProps) {
         <div className="px-2 pb-2">
           <div className="flex flex-wrap gap-1">
             {/* Legacy Effects */}
-            {card.effects?.map((effect, index) => {
-              const effectMap = {
+            {card.effects?.map((effect: LegacyEffect, index: number) => {
+              const effectMap: Record<LegacyEffect, { src: string; alt: string }> = {
                 Explosive: { src: "/effects/explosion.svg", alt: "Explosive" },
                 Offensive: { src: "/effects/sword.svg", alt: "Offensive" },
                 Defensive: { src: "/effects/shield.svg", alt: "Defensive" }

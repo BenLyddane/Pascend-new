@@ -2,17 +2,11 @@
 
 import { useState } from "react";
 import {
-  Card,
   GameCard,
   convertToGameCard,
 } from "@/app/protected/play/game-engine/types";
-import { Database } from "@/types/database.types";
 import { GameMode } from "../game-modes/types";
-
-type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
-  cards: Card[];
-};
-
+import { DeckWithCards, CardWithEffects } from "@/app/actions/fetchDecks";
 import DeckSelector from "./deck-selector";
 import GameSetup from "./game-setup";
 import GamePlay from "./game-play";
@@ -22,8 +16,8 @@ type GameState = "selecting" | "setup" | "playing";
 export default function PracticeMode() {
   const [gameState, setGameState] = useState<GameState>("selecting");
   const [selectedDecks, setSelectedDecks] = useState<{
-    deck1: Deck | null;
-    deck2: Deck | null;
+    deck1: DeckWithCards | null;
+    deck2: DeckWithCards | null;
   }>({
     deck1: null,
     deck2: null,
@@ -36,7 +30,7 @@ export default function PracticeMode() {
     player2Cards: [],
   });
 
-  const handleDeckSelect = (deck: Deck, isFirstDeck: boolean) => {
+  const handleDeckSelect = (deck: DeckWithCards, isFirstDeck: boolean) => {
     setSelectedDecks((prev) => ({
       ...prev,
       [isFirstDeck ? "deck1" : "deck2"]: deck,
@@ -49,8 +43,8 @@ export default function PracticeMode() {
   };
 
   const handleSetupComplete = (
-    deck1Cards: Card[],
-    deck2Cards: Card[],
+    deck1Cards: CardWithEffects[],
+    deck2Cards: CardWithEffects[],
     player1Ready: boolean,
     player2Ready: boolean
   ) => {

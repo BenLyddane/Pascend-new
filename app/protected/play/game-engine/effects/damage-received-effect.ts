@@ -24,7 +24,7 @@ export class DamageReceivedEffect implements EffectProcessor {
         result.battleEffect = createBattleEffect(
           'ShieldCheck',
           'combat',
-          `${effectName}: ${card.card.name} reduced incoming damage by ${modifiedValue} (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} reduced incoming damage by ${modifiedValue}`
         );
         break;
 
@@ -33,7 +33,7 @@ export class DamageReceivedEffect implements EffectProcessor {
         result.battleEffect = createBattleEffect(
           'Shield',
           'combat',
-          `${effectName}: ${card.card.name} blocked ${modifiedValue} damage (${effect.value} × ${card.card.modifier || 1} modifier)`
+          `${effectName}: ${card.card.name} blocked ${modifiedValue} damage`
         );
         break;
     }

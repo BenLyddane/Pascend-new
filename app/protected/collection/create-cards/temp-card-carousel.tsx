@@ -6,28 +6,35 @@ import { keepCard } from "@/app/actions/keepCard";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { GameCard } from "@/components/game-card";
-import type { Database } from "@/types/database.types";
-import { TempCard } from "@/types/game.types";
+import { TempCard, BaseCardEffect, isBaseCardEffect } from "@/types/game.types";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
+import type { Json } from "@/types/database.types";
 
-type DbCard = Database["public"]["Tables"]["cards"]["Row"];
-type DbSpecialProperty = Database["public"]["Tables"]["special_properties"]["Row"];
-
-type GameCardType = {
-  id: string;
-  name: string;
-  description: string;
-  power: number;
-  health: number;
-  modifier: number | null;
-  rarity: string;
-  image_url: string | null;
-  special_effects?: DbSpecialProperty[] | null;
-  edition: string;
-  is_active: boolean | null;
-  keywords: string[] | null;
-  user_id: string;
-  created_at: string | null;
-};
+function convertToBaseCardEffects(effects: Json | null): BaseCardEffect[] {
+  if (!effects || !Array.isArray(effects)) return [];
+  return effects
+    .map(effect => {
+      if (!effect || typeof effect !== 'object') return null;
+      const obj = effect as Record<string, unknown>;
+      if (
+        typeof obj.name === 'string' &&
+        typeof obj.description === 'string' &&
+        typeof obj.effect_type === 'string' &&
+        typeof obj.effect_icon === 'string' &&
+        (typeof obj.value === 'number' || obj.value === null)
+      ) {
+        return {
+          name: obj.name,
+          description: obj.description,
+          effect_type: obj.effect_type,
+          effect_icon: obj.effect_icon,
+          value: obj.value ?? 0
+        };
+      }
+      return null;
+    })
+    .filter((effect): effect is BaseCardEffect => effect !== null);
+}
 
 interface ClientTempCardCarouselProps {
   cards: TempCard[];
@@ -125,8 +132,8 @@ export function ClientTempCardCarousel({
                 is_active: true,
                 keywords: [],
                 user_id: userId,
-                special_effects: card.special_effects as DbSpecialProperty[] | null
-              } satisfies GameCardType} 
+                special_effects: convertToBaseCardEffects(card.special_effects)
+              } satisfies CardWithEffects}
             />
             <Button
               onClick={() => handleKeep(card.id)}
