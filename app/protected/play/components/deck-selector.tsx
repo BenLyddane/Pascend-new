@@ -2,6 +2,12 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { CardRarity } from "@/types/game.types";
 import { GameCard, CardEffect, convertToGameCard } from "@/app/protected/play/game-engine/types";
 import { GameCardMinimal } from "@/components/game-card-minimal";
@@ -87,6 +93,12 @@ export default function DeckSelector({
     );
   }, [decks, searchQuery]);
 
+  const hasDeckListedCards = (deck: DeckWithCards) => {
+    return deck.cards.some(card => 
+      card.trade_listings?.some(listing => listing.status === "active")
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-48">
@@ -120,15 +132,23 @@ export default function DeckSelector({
 
       <div className="grid grid-cols-3 gap-4">
         {paginatedDecks.map((deck) => (
-          <button
-            key={deck.id}
-            onClick={() => onDeckSelect('gameplay_effects' in deck.cards[0] ? deck : convertDeck(deck))}
-            className={`p-4 rounded-lg border-2 transition-all ${
-              selectedDeck?.id === deck.id
-                ? "border-primary bg-primary/10"
-                : "border-muted hover:border-primary/50"
-            }`}
-          >
+          <TooltipProvider key={deck.id}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => {
+                    if (!hasDeckListedCards(deck)) {
+                      onDeckSelect('gameplay_effects' in deck.cards[0] ? deck : convertDeck(deck));
+                    }
+                  }}
+                  className={`p-4 rounded-lg border-2 transition-all ${
+                    selectedDeck?.id === deck.id
+                      ? "border-primary bg-primary/10"
+                      : hasDeckListedCards(deck)
+                      ? "border-muted opacity-50 cursor-not-allowed"
+                      : "border-muted hover:border-primary/50"
+                  }`}
+                >
             <div className="flex justify-between items-start mb-2">
               <div>
                 <h4 className="font-medium">{deck.name}</h4>
@@ -150,7 +170,15 @@ export default function DeckSelector({
                 />
               )}
             </div>
-          </button>
+                </button>
+              </TooltipTrigger>
+              {hasDeckListedCards(deck) && (
+                <TooltipContent side="top">
+                  <p>This deck contains cards that are listed for trade and cannot be used</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         ))}
       </div>
 

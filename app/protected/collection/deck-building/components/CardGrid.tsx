@@ -110,7 +110,14 @@ export function CardGrid({
                       ? "ring-2 ring-green-500 scale-105"
                       : ""
                   }`}
-                  onClick={() => onCardSelect(card)}
+                  onClick={() => {
+                    const isListed = card.trade_listings?.some(
+                      (listing) => listing.status === "active"
+                    );
+                    if (!isListed) {
+                      onCardSelect(card);
+                    }
+                  }}
                 >
                   <GameCardDeckBuilder card={card} />
                 </div>

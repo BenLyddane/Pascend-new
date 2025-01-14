@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { purchaseCard, getActiveTradingListings } from "@/app/actions/trading";
-import { TradingCard } from "./trading-card";
+import { GameCard } from "@/components/game-card";
 import { Loader2 } from "lucide-react";
 import { TradeListingData } from "../types";
 
@@ -78,7 +78,7 @@ export function MarketListings({ userId }: MarketListingsProps) {
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {listings.map((listing) => (
         <Card key={listing.id} className="p-4">
-          <TradingCard card={listing.card} />
+          <GameCard card={listing.card} className="w-full" />
           <div className="mt-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium">Price:</span>

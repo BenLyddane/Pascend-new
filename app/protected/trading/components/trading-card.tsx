@@ -3,6 +3,12 @@
 import Image from "next/image";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import { TradingCardData } from "../types";
 
@@ -89,9 +95,60 @@ export function TradingCard({ card, className }: TradingCardProps) {
         </div>
 
         {/* Description */}
-        <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
-          {card.description}
-        </p>
+        <TooltipProvider delayDuration={0}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 cursor-pointer">
+                {card.description}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent 
+              side="top" 
+              align="center" 
+              className="max-w-[300px] p-4 z-[9999]"
+              sideOffset={10}
+              avoidCollisions={true}
+            >
+              <p className="text-sm whitespace-normal">{card.description}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        {/* Effects */}
+        {card.special_effects && card.special_effects.length > 0 && (
+          <div className="relative overflow-visible">
+            <h3 className="text-sm font-semibold mb-2">Effects</h3>
+            <div className="flex flex-wrap gap-2">
+              {card.special_effects.map((effect, index) => (
+                <TooltipProvider key={`special-${index}`} delayDuration={0}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div
+                        className="w-8 h-8 rounded-full bg-[#1a1b26] flex items-center justify-center cursor-pointer hover:bg-[#2a2b36] transition-colors"
+                      >
+                        <span className="text-lg">
+                          {effect.effect_icon}
+                        </span>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent
+                      side="top"
+                      align="center"
+                      className="max-w-[300px] p-4 z-[9999] bg-[#1a1b26] text-white"
+                      sideOffset={10}
+                      avoidCollisions={true}
+                    >
+                      <p className="font-semibold whitespace-normal">{effect.name}</p>
+                      <p className="text-sm whitespace-normal">
+                        {effect.description}
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 gap-2 text-sm">

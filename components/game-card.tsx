@@ -12,12 +12,16 @@ import {
 } from "@/components/ui/tooltip";
 import { CardWithEffects } from "@/app/actions/fetchDecks";
 import { cn } from "@/lib/utils";
+import { TradeListing } from "@/app/actions/fetchCards";
+import { useRouter } from "next/navigation";
+import { TagIcon } from "lucide-react";
 
 type LegacyEffect = "Explosive" | "Offensive" | "Defensive";
 
 interface GameCardProps {
   card: CardWithEffects & {
     effects?: LegacyEffect[];
+    trade_listings?: TradeListing[];
   };
   onClick?: () => void;
   className?: string;
@@ -77,6 +81,16 @@ const effectColors = {
 type EffectType = keyof typeof effectIcons;
 
 export function GameCard({ card, onClick, className }: GameCardProps) {
+  const router = useRouter();
+  const activeListing = card.trade_listings?.find(listing => listing.status === "active");
+
+  const handleClick = () => {
+    if (activeListing) {
+      router.push(`/protected/trading?listingId=${activeListing.id}`);
+    } else if (onClick) {
+      onClick();
+    }
+  };
   const replaceModifiers = (
     description: string,
     modifier: number | null,
@@ -152,14 +166,20 @@ export function GameCard({ card, onClick, className }: GameCardProps) {
 
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className={cn(
         "w-[280px] bg-white dark:bg-neutral-900 rounded-lg cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-all duration-300 shadow-lg",
         className
       )}
     >
       {/* Image Section */}
-      <div className={`relative w-full h-[200px] border-4 ${borderColor}`}>
+      <div className={`relative w-full h-[200px] border-4 ${borderColor} ${activeListing ? 'opacity-75' : ''}`}>
+        {activeListing && (
+          <div className="absolute top-2 right-2 z-10 bg-primary text-primary-foreground px-2 py-1 rounded-md flex items-center gap-1">
+            <TagIcon size={16} />
+            <span>{activeListing.token_price} tokens</span>
+          </div>
+        )}
         {card.image_url ? (
           <Image
             src={card.image_url}

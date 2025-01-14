@@ -13,6 +13,11 @@ type SpecialEffect = Database["public"]["Tables"]["special_properties"]["Row"];
 
 interface Card extends DbCard {
   effects?: ("Explosive" | "Offensive" | "Defensive")[];
+  trade_listings?: {
+    id: string;
+    token_price: number;
+    status: "active" | "sold" | "cancelled";
+  }[];
 }
 
 interface GameCardDeckBuilderProps {
@@ -208,12 +213,18 @@ export function GameCardDeckBuilder({ card, onClick, className }: GameCardDeckBu
     <div
       onClick={onClick}
       className={cn(
-        "w-[200px] bg-white dark:bg-neutral-900 rounded-lg overflow-hidden cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-all duration-300 shadow-lg",
+        "w-[200px] bg-white dark:bg-neutral-900 rounded-lg overflow-hidden transition-all duration-300 shadow-lg",
+        !card.trade_listings?.some(listing => listing.status === "active") && "cursor-pointer hover:scale-[1.02] hover:shadow-xl",
         className
       )}
     >
       {/* Image Section */}
-      <div className={`relative w-full h-[120px] border-4 ${borderColor}`}>
+      <div className={`relative w-full h-[120px] border-4 ${borderColor} ${card.trade_listings?.some(listing => listing.status === "active") ? 'opacity-75' : ''}`}>
+        {card.trade_listings?.some(listing => listing.status === "active") && (
+          <div className="absolute top-2 right-2 z-10 bg-primary text-primary-foreground px-2 py-1 rounded-md flex items-center gap-1 text-xs">
+            <span>Listed</span>
+          </div>
+        )}
         {card.image_url ? (
           <Image
             src={card.image_url}

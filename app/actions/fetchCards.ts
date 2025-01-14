@@ -6,8 +6,15 @@ export type CardProperty = Database["public"]["Tables"]["card_properties"]["Row"
   special_properties: SpecialProperty;
 };
 
+export type TradeListing = {
+  id: string;
+  token_price: number;
+  status: Database["public"]["Enums"]["trade_listing_status"];
+};
+
 export type Card = Database["public"]["Tables"]["cards"]["Row"] & {
   card_properties?: CardProperty[];
+  trade_listings?: TradeListing[];
 };
 
 export type PlayerCard = Database["public"]["Tables"]["player_cards"]["Row"] & {
@@ -72,6 +79,11 @@ export async function fetchCards(userId: string): Promise<Card[]> {
       .from("cards")
       .select(`
         *,
+        trade_listings(
+          id,
+          token_price,
+          status
+        ),
         card_properties:card_properties(
           value,
           special_properties:special_properties(

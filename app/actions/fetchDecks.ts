@@ -20,6 +20,11 @@ export type CardWithEffects = Omit<Card, "special_effects"> & {
     value: number;
   }[];
   special_properties?: SpecialProperty[];
+  trade_listings?: {
+    id: string;
+    token_price: number;
+    status: Database["public"]["Enums"]["trade_listing_status"];
+  }[];
 };
 
 export type DeckWithCards = Omit<PlayerDeck, "card_list"> & {
@@ -42,6 +47,11 @@ export async function fetchDecks(userId: string): Promise<FetchDecksResult> {
       .select(
         `
         *,
+        trade_listings(
+          id,
+          token_price,
+          status
+        ),
         card_properties:card_properties(
           value,
           special_properties:special_properties(
