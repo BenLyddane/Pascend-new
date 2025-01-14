@@ -59,6 +59,7 @@ export type CardGenerationRequest = {
   prompt: string;
   style: CardStyle;
   userId: string;
+  usePurchasedToken: boolean;
 };
 
 // Temp card type based on database schema

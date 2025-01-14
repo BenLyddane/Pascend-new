@@ -25,17 +25,42 @@ import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { CardModal } from "./card-modal";
 import { useState, useEffect } from "react";
-import type { CardWithEffects, CardRarity } from "@/types/game.types";
+import type { CardWithEffects, CardRarity, BaseCardEffect, isBaseCardEffect } from "@/types/game.types";
 
-interface CardStats {
-  totalCards: number;
-  uniqueCards: number;
-  legendaryCount: number;
-  epicCount: number;
-  collectionProgress: number;
+import type { Database, Json } from "@/types/database.types";
+
+type DbCard = Database["public"]["Tables"]["cards"]["Row"];
+type DbCollectionStats = Database["public"]["Tables"]["collection_stats"]["Row"];
+
+type CardStats = Pick<DbCollectionStats, "total_cards" | "unique_cards" | "legendary_count" | "epic_count" | "collection_progress">;
+
+// Keep PlayerCard as DbCard for database operations
+type PlayerCard = DbCard;
+
+// Convert database card to CardWithEffects type
+function convertToCardWithEffects(card: PlayerCard): CardWithEffects {
+  let effects: BaseCardEffect[] = [];
+  
+  if (card.special_effects && Array.isArray(card.special_effects)) {
+    effects = card.special_effects
+      .filter((effect): effect is Json => effect !== null && typeof effect === 'object')
+      .map(effect => {
+        const jsonEffect = effect as { [key: string]: Json };
+        return {
+          name: String(jsonEffect.name || ''),
+          description: String(jsonEffect.description || ''),
+          effect_type: String(jsonEffect.effect_type || ''),
+          effect_icon: String(jsonEffect.effect_icon || ''),
+          value: typeof jsonEffect.value === 'number' ? jsonEffect.value : 0
+        };
+      });
+  }
+
+  return {
+    ...card,
+    special_effects: effects,
+  };
 }
-
-type PlayerCard = CardWithEffects;
 
 const rarityColors: Record<CardRarity, string> = {
   common: "bg-slate-200 dark:bg-slate-700",
@@ -51,17 +76,16 @@ const typeIcons = {
 };
 
 async function getCollectionStats(cards: PlayerCard[]): Promise<CardStats> {
-  // Calculate stats from the cards array
   const uniqueCards = cards.length;
   const legendaryCount = cards.filter(card => card.rarity === "legendary").length;
   const epicCount = cards.filter(card => card.rarity === "epic").length;
   
   return {
-    totalCards: uniqueCards, // For now, total equals unique since we're not tracking duplicates
-    uniqueCards,
-    legendaryCount,
-    epicCount,
-    collectionProgress: 0, // We can calculate this if needed
+    total_cards: uniqueCards, // For now, total equals unique since we're not tracking duplicates
+    unique_cards: uniqueCards,
+    legendary_count: legendaryCount,
+    epic_count: epicCount,
+    collection_progress: 0, // We can calculate this if needed
   };
 }
 
@@ -87,26 +111,7 @@ async function getAllCards(): Promise<PlayerCard[]> {
     return [];
   }
 
-  // Ensure we have all required fields with proper types
-  return (cards || []).map(card => {
-    const cardWithDefaults: CardWithEffects = {
-      id: card.id,
-      name: card.name || "",
-      description: card.description || "",
-      rarity: (card.rarity || "common") as CardRarity,
-      power: card.power || 0,
-      health: card.health || 0,
-      modifier: card.modifier || null,
-      image_url: card.image_url || null,
-      special_effects: Array.isArray(card.special_effects) ? card.special_effects : [],
-      is_active: card.is_active ?? true,
-      user_id: card.user_id,
-      created_at: card.created_at || new Date().toISOString(),
-      edition: "standard", // Default value
-      keywords: [] // Default value
-    };
-    return cardWithDefaults;
-  });
+  return cards || [];
 }
 
 function CardPreview({ card, onClick }: { card: PlayerCard; onClick: () => void }) {
@@ -184,23 +189,23 @@ function CollectionContent() {
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
           <span className="text-sm text-muted-foreground">Collection</span>
           <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold">{stats?.uniqueCards || 0}</span>
+            <span className="text-2xl font-bold">{stats?.unique_cards || 0}</span>
             <span className="text-sm text-muted-foreground">
-              / {stats?.totalCards || 0}
+              / {stats?.total_cards || 0}
             </span>
           </div>
         </div>
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
           <span className="text-sm text-muted-foreground">Legendary</span>
           <div className="flex items-center gap-1">
-            <span className="text-2xl font-bold">{stats?.legendaryCount || 0}</span>
+            <span className="text-2xl font-bold">{stats?.legendary_count || 0}</span>
             <StarIcon size={16} className="text-amber-500" />
           </div>
         </div>
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
           <span className="text-sm text-muted-foreground">Epic</span>
           <div className="flex items-center gap-1">
-            <span className="text-2xl font-bold">{stats?.epicCount || 0}</span>
+            <span className="text-2xl font-bold">{stats?.epic_count || 0}</span>
             <GemIcon size={16} className="text-purple-500" />
           </div>
         </div>
@@ -243,7 +248,7 @@ function CollectionContent() {
 
       {/* Card Modal */}
       <CardModal
-        card={selectedCard}
+        card={selectedCard ? convertToCardWithEffects(selectedCard) : null}
         isOpen={!!selectedCard}
         onClose={() => setSelectedCard(null)}
       />

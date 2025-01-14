@@ -3,7 +3,8 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { FormMessage } from "@/components/form-message";
 import { SubmitButton } from "@/components/submit-button";
-import { TokenPurchase } from "@/components/token-purchase";
+import { TokenDisplay } from "@/components/token-display";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -47,7 +48,7 @@ const defaultSettings = {
 export default async function ProfilePage({
   searchParams,
 }: {
-  searchParams: { message: string; type?: string };
+  searchParams: { message: string; type?: string; tab?: string };
 }) {
   const supabase = await createClient();
 
@@ -143,38 +144,32 @@ export default async function ProfilePage({
   return (
     <div className="flex-1 flex flex-col gap-6 max-w-4xl mx-auto p-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Profile Settings</h1>
+        <div className="flex items-center gap-6">
+          <h1 className="text-3xl font-bold">Profile Settings</h1>
+          <TokenDisplay 
+            tokens={profile?.tokens || 0}
+            purchasedTokens={profile?.purchased_tokens || 0}
+            minimal={true}
+          />
+          <Link 
+            href="/protected/tokens"
+            className="text-sm text-blue-500 hover:text-blue-600"
+          >
+            Manage Tokens →
+          </Link>
+        </div>
         <Badge className={`${getRankColor(profile?.rank_tier)} text-white`}>
-          {profile?.rank_tier?.toUpperCase() || 'UNRANKED'}
+          {profile?.rank_tier?.toUpperCase() || "UNRANKED"}
         </Badge>
       </div>
 
-      <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue={searchParams?.tab || "profile"} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="stats">Statistics</TabsTrigger>
           <TabsTrigger value="settings">Settings</TabsTrigger>
-          <TabsTrigger value="tokens">Tokens</TabsTrigger>
         </TabsList>
-
-        <TabsContent value="tokens">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tokens</CardTitle>
-              <CardDescription>
-                Purchase and manage your tokens
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="mb-6">
-                <p className="text-sm text-muted-foreground">Current Balance</p>
-                <p className="text-3xl font-bold">{profile?.tokens || 0}</p>
-              </div>
-              <TokenPurchase userId={user.id} currentTokens={profile?.tokens || 0} />
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="profile">
           <Card>
@@ -447,7 +442,9 @@ export default async function ProfilePage({
                     </div>
                     <Switch
                       name="card_animation"
-                      defaultChecked={settings?.preferences?.cardAnimation ?? true}
+                      defaultChecked={
+                        settings?.preferences?.cardAnimation ?? true
+                      }
                     />
                   </div>
                 </div>
@@ -469,7 +466,7 @@ export default async function ProfilePage({
 
       {searchParams?.message && (
         <Alert
-          variant={searchParams.type === "error" ? "destructive" : "default"}
+          variant={searchParams?.type === "error" ? "destructive" : "default"}
           className="mt-4"
         >
           <AlertDescription>{searchParams.message}</AlertDescription>

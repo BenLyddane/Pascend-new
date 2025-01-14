@@ -32,11 +32,27 @@ export async function POST(req: Request) {
     );
 
     if (event.type === 'checkout.session.completed') {
+      console.log('Processing completed checkout session:', event.data.object.id);
       const session = event.data.object as Stripe.Checkout.Session;
-      await handleTokenPurchaseSuccess(session);
+      
+      try {
+        await handleTokenPurchaseSuccess(session);
+        console.log('Successfully processed token purchase for session:', session.id);
+      } catch (error) {
+        console.error('Failed to process token purchase:', error);
+        // We should still return 200 to acknowledge receipt of the webhook
+        // but log the error for investigation
+        return new NextResponse(JSON.stringify({ error: 'Failed to process token purchase' }), { 
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
-    return new NextResponse('Webhook processed', { status: 200 });
+    return new NextResponse(JSON.stringify({ received: true }), { 
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (err) {
     console.error('Error processing webhook:', err);
     return new NextResponse('Webhook error', { status: 400 });

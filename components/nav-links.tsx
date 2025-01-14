@@ -38,7 +38,7 @@ export default function NavLinks({ email, displayName }: NavLinksProps) {
     },
     {
       name: "Tokens",
-      href: "/protected/profile",
+      href: "/protected/tokens",
       icon: <CoinsIcon size={16} />,
     },
     {

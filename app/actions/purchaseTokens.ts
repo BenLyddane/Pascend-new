@@ -14,8 +14,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 export type TokenAmount = 10 | 100;
 
 const PRICE_IDS = {
-  10: process.env.STRIPE_PRICE_ID_10,
-  100: process.env.STRIPE_PRICE_ID_100,
+  10: 'price_1QgVTvG3gK5JpVOEcPjDV5jD',
+  100: 'price_1QgVUGG3gK5JpVOEI8TWA6Lt',
 } as const;
 
 export async function createTokenPurchaseSession(userId: string, amount: TokenAmount) {
@@ -54,8 +54,8 @@ export async function createTokenPurchaseSession(userId: string, amount: TokenAm
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/protected/collection/create-cards?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/profile`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/protected/tokens?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/protected/tokens`,
       metadata: {
         userId: userId,
       },
@@ -63,7 +63,15 @@ export async function createTokenPurchaseSession(userId: string, amount: TokenAm
 
     return { sessionId: session.id, url: session.url };
   } catch (error) {
-    console.error('Error creating checkout session:', error);
+    console.error('Error creating checkout session:', {
+      error,
+      userId,
+      amount,
+      priceId: PRICE_IDS[amount]
+    });
+    if (error instanceof Error) {
+      throw new Error(`Failed to create checkout session: ${error.message}`);
+    }
     throw new Error('Failed to create checkout session');
   }
 }
@@ -76,47 +84,44 @@ export async function handleTokenPurchaseSuccess(session: Stripe.Checkout.Sessio
     throw new Error('User ID not found in session metadata');
   }
 
-  // Get the token amount from the price ID
-  const tokenAmount = Object.entries(PRICE_IDS).find(
-    ([_, priceId]) => priceId === session.line_items?.data[0]?.price?.id
-  )?.[0];
+  // Retrieve the session with line items expanded
+  const expandedSession = await stripe.checkout.sessions.retrieve(session.id, {
+    expand: ['line_items.data.price']
+  });
 
-  if (!tokenAmount) {
+  // Get the token amount from the price ID
+  const priceId = expandedSession.line_items?.data[0]?.price?.id;
+  let amount: number;
+
+  if (priceId === PRICE_IDS[10]) {
+    amount = 10;
+  } else if (priceId === PRICE_IDS[100]) {
+    amount = 100;
+  } else {
     throw new Error('Invalid price ID in session');
   }
 
-  const amount = parseInt(tokenAmount);
-
   try {
-    // Start a transaction
-    const { data: profile, error: profileError } = await supabase
-      .from('player_profiles')
-      .select('tokens')
-      .eq('user_id', userId)
-      .single();
+    // Handle token purchase using database function
+    const { error: purchaseError } = await supabase
+      .rpc('handle_token_purchase', {
+        p_user_id: userId,
+        p_amount: amount
+      });
 
-    if (profileError) {
-      throw new Error('Failed to fetch user profile');
+    if (purchaseError) {
+      throw new Error('Failed to process token purchase');
     }
 
-    // Update tokens
-    const { error: updateError } = await supabase
-      .from('player_profiles')
-      .update({ tokens: (profile?.tokens || 0) + amount })
-      .eq('user_id', userId);
-
-    if (updateError) {
-      throw new Error('Failed to update tokens');
-    }
-
-    // Record transaction
+    // Record transaction with is_purchased flag
     const { error: transactionError } = await supabase
       .from('token_transactions')
       .insert({
         user_id: userId,
         amount: amount,
         transaction_type: 'purchase',
-        payment_id: session.id
+        payment_id: session.id,
+        is_purchased: true
       });
 
     if (transactionError) {
@@ -125,7 +130,13 @@ export async function handleTokenPurchaseSuccess(session: Stripe.Checkout.Sessio
     }
 
   } catch (error) {
-    console.error('Error processing token purchase:', error);
+    console.error('Error processing token purchase:', {
+      error,
+      sessionId: session.id,
+      userId,
+      amount,
+      priceId
+    });
     throw error;
   }
 }

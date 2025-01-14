@@ -90,6 +90,7 @@ export async function keepCard({
       created_at: new Date().toISOString(),
       is_active: true,
       edition: tempCards.edition || "standard",
+      generated_with_purchased_tokens: tempCards.generated_with_purchased_tokens,
     };
 
     // 3. Insert the permanent card and handle special properties

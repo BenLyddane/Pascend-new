@@ -180,12 +180,13 @@ async function generateImage(stylePrompt: string, description: string) {
 }
 
 // Main function to generate cards
-import { deductTokenForCardGeneration } from "./tokenActions";
+import { deductTokenForCardGeneration, refundToken } from "./tokenActions";
 
 export async function generateCards({
   prompt,
   style,
   userId,
+  usePurchasedToken,
 }: CardGenerationRequest): Promise<TempCard[]> {
   if (!prompt || !style || !userId) {
     throw new Error("Missing required parameters");
@@ -193,23 +194,12 @@ export async function generateCards({
 
   const supabase = await createClient();
 
+  const cardsToGenerate = 3;
+  let deductionResult;
+
   try {
-    // Check token balance first
-    const supabaseClient = await createClient();
-    const { data: profile } = await supabaseClient
-      .from("player_profiles")
-      .select("tokens")
-      .eq("user_id", userId)
-      .single();
-
-    if (!profile || profile.tokens < 1) {
-      throw new Error("Insufficient tokens");
-    }
-
-    // Deduct token with a single atomic operation
-    await deductTokenForCardGeneration(userId);
-
-    const cardsToGenerate = 3;
+    // Deduct token with specified type
+    deductionResult = await deductTokenForCardGeneration(userId, usePurchasedToken);
     const generationId = randomUUID(); // Batch ID for the cards
     const generatedCards: TempCard[] = [];
 
@@ -248,7 +238,7 @@ export async function generateCards({
         specialEffects,
       });
 
-      // Insert card into the database with the permanent image URL
+      // Insert card into the database with the permanent image URL and purchased token flag
       const { data: insertedCard, error: insertError } = await supabase
         .from("temp_cards")
         .insert([
@@ -259,17 +249,19 @@ export async function generateCards({
             rarity,
             power: stats.power,
             health: stats.health,
-            modifier: stats.modifier,
+            modifier: stats.modifier || 1, // Ensure modifier is never null
             special_effects: specialEffects,
             user_id: userId,
             gen_id: generationId,
+            generated_with_purchased_tokens: deductionResult.usedPurchasedToken
           },
         ])
         .select()
         .single();
 
       if (insertError) {
-        throw new Error("Failed to save generated card");
+        console.error("Card insertion error:", insertError);
+        throw new Error(`Failed to save generated card: ${insertError.message}`);
       }
 
       generatedCards.push(insertedCard);
@@ -278,6 +270,10 @@ export async function generateCards({
     return generatedCards;
   } catch (error) {
     console.error("Error generating cards:", error);
+    // Attempt to refund the token if we had successfully deducted one
+    if (deductionResult) {
+      await refundToken(userId, deductionResult.usedPurchasedToken);
+    }
     throw error;
   }
 }
