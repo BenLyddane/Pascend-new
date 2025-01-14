@@ -4,7 +4,10 @@ import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
-import { BattleLogEntry, BattleEffect } from "@/app/protected/play/game-engine/types";
+import {
+  BattleLogEntry,
+  BattleEffect,
+} from "@/app/protected/play/game-engine/types";
 
 type BattleLogProps = {
   entries: BattleLogEntry[];
@@ -14,53 +17,58 @@ type BattleLogProps = {
 };
 
 const effectStyles = {
-  'turn_start': {
-    bg: 'bg-amber-500/10',
-    text: 'text-amber-500',
-    defaultIcon: '🔄'
+  turn_start: {
+    bg: "bg-amber-500/10",
+    text: "text-amber-500",
+    defaultIcon: "🔄",
   },
-  'pre_combat': {
-    bg: 'bg-emerald-500/10',
-    text: 'text-emerald-500',
-    defaultIcon: '⚡'
+  pre_combat: {
+    bg: "bg-emerald-500/10",
+    text: "text-emerald-500",
+    defaultIcon: "⚡",
   },
-  'combat': {
-    bg: 'bg-red-500/10',
-    text: 'text-red-500',
-    defaultIcon: '⚔️'
+  combat: {
+    bg: "bg-red-500/10",
+    text: "text-red-500",
+    defaultIcon: "⚔️",
   },
-  'post_combat': {
-    bg: 'bg-violet-500/10',
-    text: 'text-violet-500',
-    defaultIcon: '🌟'
+  post_combat: {
+    bg: "bg-violet-500/10",
+    text: "text-violet-500",
+    defaultIcon: "🌟",
   },
-  'turn_end': {
-    bg: 'bg-blue-500/10',
-    text: 'text-blue-500',
-    defaultIcon: '🔄'
+  turn_end: {
+    bg: "bg-blue-500/10",
+    text: "text-blue-500",
+    defaultIcon: "🔄",
   },
-  'on_death': {
-    bg: 'bg-purple-500/10',
-    text: 'text-purple-500',
-    defaultIcon: '💀'
+  on_death: {
+    bg: "bg-purple-500/10",
+    text: "text-purple-500",
+    defaultIcon: "💀",
   },
-  'game_end': {
-    bg: 'bg-yellow-500/10',
-    text: 'text-yellow-500',
-    defaultIcon: '🏆'
-  }
+  game_end: {
+    bg: "bg-yellow-500/10",
+    text: "text-yellow-500",
+    defaultIcon: "🏆",
+  },
+  error: {
+    bg: "bg-red-700/10",
+    text: "text-red-700",
+    defaultIcon: "⚠️",
+  },
 } as const;
 
 const effectIcons = {
-  'Flame': '🔥',
-  'Sword': '⚔️',
-  'Shield': '🛡️',
-  'ShieldCheck': '✅',
-  'Heart': '❤️',
-  'Bomb': '💣',
-  'TrendingUp': '📈',
-  'RefreshCw': '🔄',
-  'Snowflake': '❄️'
+  Flame: "🔥",
+  Sword: "⚔️",
+  Shield: "🛡️",
+  ShieldCheck: "✅",
+  Heart: "❤️",
+  Bomb: "💣",
+  TrendingUp: "📈",
+  RefreshCw: "🔄",
+  Snowflake: "❄️",
 } as const;
 
 export default function BattleLog({
@@ -70,21 +78,26 @@ export default function BattleLog({
   player2Name,
 }: BattleLogProps) {
   const renderEffect = (effect: BattleEffect, index: number) => {
-    const timing = effect.timing || 'combat';
+    const timing = effect.timing || "combat";
     const style = effectStyles[timing];
-    const icon = effect.icon ? effectIcons[effect.icon as keyof typeof effectIcons] || effect.icon : style.defaultIcon;
+    const icon = effect.icon
+      ? effectIcons[effect.icon as keyof typeof effectIcons] || effect.icon
+      : style.defaultIcon;
 
-    let label = timing.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    if (effect.type === 'hit') label = 'Combat';
-    if (effect.type === 'defeat') label = 'Defeat';
+    let label = timing
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
+    if (effect.type === "hit") label = "Combat";
+    if (effect.type === "defeat") label = "Defeat";
 
     return (
-      <div 
-        key={`${timing}-${index}`} 
+      <div
+        key={`${timing}-${index}`}
         className={cn(
           "flex items-center gap-2 text-sm p-2 rounded",
           style.bg,
-          effect.type === 'defeat' && "mt-1 text-base"
+          effect.type === "defeat" && "mt-1 text-base"
         )}
       >
         <span className={cn("font-semibold", style.text)}>
@@ -199,24 +212,36 @@ export default function BattleLog({
               <div className="flex justify-between mt-2 mb-3">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Power: </span>
-                  <span className="font-medium">{entry.attacker.startPower}</span>
+                  <span className="font-medium">
+                    {entry.attacker.startPower}
+                  </span>
                   {entry.attacker.startPower !== entry.attacker.endPower && (
-                    <span className={cn(
-                      "ml-1",
-                      entry.attacker.endPower > entry.attacker.startPower ? "text-green-500" : "text-red-500"
-                    )}>
+                    <span
+                      className={cn(
+                        "ml-1",
+                        entry.attacker.endPower > entry.attacker.startPower
+                          ? "text-green-500"
+                          : "text-red-500"
+                      )}
+                    >
                       → {entry.attacker.endPower}
                     </span>
                   )}
                 </div>
                 <div className="text-sm">
                   <span className="text-muted-foreground">Power: </span>
-                  <span className="font-medium">{entry.defender.startPower}</span>
+                  <span className="font-medium">
+                    {entry.defender.startPower}
+                  </span>
                   {entry.defender.startPower !== entry.defender.endPower && (
-                    <span className={cn(
-                      "ml-1",
-                      entry.defender.endPower > entry.defender.startPower ? "text-green-500" : "text-red-500"
-                    )}>
+                    <span
+                      className={cn(
+                        "ml-1",
+                        entry.defender.endPower > entry.defender.startPower
+                          ? "text-green-500"
+                          : "text-red-500"
+                      )}
+                    >
                       → {entry.defender.endPower}
                     </span>
                   )}
@@ -227,20 +252,13 @@ export default function BattleLog({
               <div className="mt-2 space-y-2">
                 {/* Group and sort effects by timing */}
                 {[
-                  ...entry.effects
-                    .filter(e => e.timing === 'turn_start'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'pre_combat'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'combat'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'post_combat'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'turn_end'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'on_death'),
-                  ...entry.effects
-                    .filter(e => e.timing === 'game_end')
+                  ...entry.effects.filter((e) => e.timing === "turn_start"),
+                  ...entry.effects.filter((e) => e.timing === "pre_combat"),
+                  ...entry.effects.filter((e) => e.timing === "combat"),
+                  ...entry.effects.filter((e) => e.timing === "post_combat"),
+                  ...entry.effects.filter((e) => e.timing === "turn_end"),
+                  ...entry.effects.filter((e) => e.timing === "on_death"),
+                  ...entry.effects.filter((e) => e.timing === "game_end"),
                 ].map((effect, i) => renderEffect(effect, i))}
               </div>
             </Card>

@@ -12,6 +12,13 @@ export class BattleManager {
   private effectPhaseProcessor: EffectPhaseProcessor;
   private battleLogger: BattleLogger;
 
+  getCurrentBattlers(): { 
+    attacker: CardState | null; 
+    defender: CardState | null; 
+  } {
+    return this.stateManager.getCurrentBattlers();
+  }
+
   constructor(
     private gameState: GameState,
     effectsProcessor: EffectsProcessor,
@@ -110,45 +117,87 @@ export class BattleManager {
       this.gameState.currentTurn
     );
 
-    // Process effects in order
-    this.effectPhaseProcessor.processPhase(
-      "turn_start",
-      attacker,
-      defender,
-      logEntry
-    );
-    this.effectPhaseProcessor.processPhase(
-      "pre_combat",
-      attacker,
-      defender,
-      logEntry
-    );
-    this.combatProcessor.processCombat(attacker, defender, logEntry);
-    this.effectPhaseProcessor.processPhase(
-      "post_combat",
-      attacker,
-      defender,
-      logEntry
-    );
-    this.effectPhaseProcessor.cleanupTemporaryEffects(attacker);
-    this.effectPhaseProcessor.processPhase(
-      "turn_end",
-      attacker,
-      defender,
-      logEntry
-    );
+    try {
+      // Process effects in order
+      console.log("Processing turn phases");
+      
+      this.effectPhaseProcessor.processPhase(
+        "turn_start",
+        attacker,
+        defender,
+        logEntry
+      );
+      
+      this.effectPhaseProcessor.processPhase(
+        "pre_combat",
+        attacker,
+        defender,
+        logEntry
+      );
+      
+      console.log("Processing combat between", {
+        attacker: attacker.card.name,
+        defender: defender.card.name
+      });
+      
+      this.combatProcessor.processCombat(attacker, defender, logEntry);
+      
+      this.effectPhaseProcessor.processPhase(
+        "post_combat",
+        attacker,
+        defender,
+        logEntry
+      );
+      
+      this.effectPhaseProcessor.cleanupTemporaryEffects(attacker);
+      
+      this.effectPhaseProcessor.processPhase(
+        "turn_end",
+        attacker,
+        defender,
+        logEntry
+      );
 
-    if (defender.health <= 0) {
-      this.combatProcessor.processDefeat(defender, attacker, logEntry);
+      // Check for defeated cards
+      if (defender.health <= 0) {
+        console.log("Defender defeated:", defender.card.name);
+        this.combatProcessor.processDefeat(defender, attacker, logEntry);
+        defender.isDefeated = true;
+      }
+      
+      if (attacker.health <= 0) {
+        console.log("Attacker defeated:", attacker.card.name);
+        attacker.isDefeated = true;
+      }
+
+      // Update final health values and log the entry
+      this.battleLogger.updateHealthValues(logEntry, attacker, defender);
+      this.battleLogger.logBattleEntry(logEntry);
+
+      // Advance battle state
+      console.log("Advancing battle state");
+      this.stateManager.advanceBattle();
+      this.stateManager.incrementTurn();
+      this.stateManager.checkGameEnd();
+
+      console.log("Turn completed", {
+        attackerHealth: attacker.health,
+        defenderHealth: defender.health,
+        currentTurn: this.gameState.currentTurn,
+        winner: this.gameState.winner
+      });
+
+      return logEntry;
+    } catch (error) {
+      console.error("Error processing turn:", error);
+      // Add error to battle log
+      logEntry.effects.push({
+        type: "error",
+        description: `Error processing turn: ${error instanceof Error ? error.message : "Unknown error"}`,
+        timing: "error"
+      });
+      this.battleLogger.logBattleEntry(logEntry);
+      return logEntry;
     }
-
-    // Update final health values and log the entry
-    this.battleLogger.updateHealthValues(logEntry, attacker, defender);
-    this.battleLogger.logBattleEntry(logEntry);
-
-    this.stateManager.incrementTurn();
-    this.stateManager.checkGameEnd();
-
-    return logEntry;
   }
 }

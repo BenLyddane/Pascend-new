@@ -3,6 +3,16 @@ import { Database, Json } from "@/types/database.types";
 // Base card type from database
 export type DbCard = Database["public"]["Tables"]["cards"]["Row"];
 
+// Game action types for server communication
+export interface GameAction {
+  type: "PLAY_CARD" | "USE_EFFECT" | "END_TURN";
+  payload: {
+    cardId?: string;
+    targetId?: string;
+    effectIndex?: number;
+  };
+}
+
 // Effect types
 export type EffectType =
   | "on_turn_start"
@@ -78,7 +88,22 @@ export interface CardState {
   maxHealth: number;
   power: number;
   isDefeated: boolean;
-  effects: CardEffect[]; // Add effects array to track active effects during gameplay
+  effects: CardEffect[];
+}
+
+// New type for visible card state (what opponents can see)
+export interface VisibleCardState {
+  id: string;
+  name: string;
+  image_url: string | null;
+  health: number;
+  maxHealth: number;
+  power: number;
+  isDefeated: boolean;
+  activeEffects: {
+    effect_type: EffectType;
+    effect_icon: EffectIcon;
+  }[];
 }
 
 // Battle effect timing types
@@ -89,7 +114,8 @@ export type BattleEffectTiming =
   | "post_combat"
   | "turn_end"
   | "on_death"
-  | "game_end";
+  | "game_end"
+  | "error";
 
 // Entry in the battle log
 export interface BattleLogEntry {
@@ -114,7 +140,7 @@ export interface BattleLogEntry {
 }
 
 export interface BattleEffect {
-  type: "hit" | "special" | "stat" | "defeat" | "game_end";
+  type: "hit" | "special" | "stat" | "defeat" | "game_end" | "error";
   description: string;
   icon?: string;
   timing?: BattleEffectTiming;
@@ -126,6 +152,8 @@ export interface GameState {
   player1GoesFirst: boolean;
   player1Cards: CardState[];
   player2Cards: CardState[];
+  player1VisibleCards: VisibleCardState[];
+  player2VisibleCards: VisibleCardState[];
   currentBattle: {
     card1Index: number;
     card2Index: number;
@@ -133,6 +161,7 @@ export interface GameState {
   winner: 1 | 2 | "draw" | null;
   drawReason?: string;
   battleLog: BattleLogEntry[];
+  stats: GameStats;
 }
 
 // Game statistics
@@ -225,6 +254,23 @@ export function convertToUiCard(gameCard: GameCard): UiCard {
   return {
     ...gameCard,
     effects: displayEffects,
+  };
+}
+
+// Helper function to convert CardState to VisibleCardState
+export function toVisibleCardState(cardState: CardState): VisibleCardState {
+  return {
+    id: cardState.card.id,
+    name: cardState.card.name,
+    image_url: cardState.card.image_url,
+    health: cardState.health,
+    maxHealth: cardState.maxHealth,
+    power: cardState.power,
+    isDefeated: cardState.isDefeated,
+    activeEffects: cardState.effects.map(effect => ({
+      effect_type: effect.effect_type,
+      effect_icon: effect.effect_icon
+    }))
   };
 }
 

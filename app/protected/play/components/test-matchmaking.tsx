@@ -320,7 +320,7 @@ export default function TestMatchmaking() {
         deck1={selectedDeck!}
         deck2={opponent.deck}
         onSetupComplete={handleSetupComplete}
-        isPracticeMode={false}
+        mode="ranked"
       />
     );
   }
@@ -330,7 +330,10 @@ export default function TestMatchmaking() {
       <GamePlay
         player1Cards={gameCards.player1Cards}
         player2Cards={gameCards.player2Cards}
+        player1DeckId={selectedDeck!.id}
+        player2DeckId={opponent!.deck.id}
         onGameEnd={handleGameEnd}
+        mode="ranked"
         isOnlineMatch={true} // Treat as online match to test stats
         onReturnToMatchmaking={handleReturnToMatchmaking}
       />

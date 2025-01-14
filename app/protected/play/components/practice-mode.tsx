@@ -7,6 +7,7 @@ import {
   convertToGameCard,
 } from "@/app/protected/play/game-engine/types";
 import { Database } from "@/types/database.types";
+import { GameMode } from "../game-modes/types";
 
 type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
   cards: Card[];
@@ -53,40 +54,26 @@ export default function PracticeMode() {
     player1Ready: boolean,
     player2Ready: boolean
   ) => {
-    console.log("\n=== Practice Mode Setup Complete ===");
-    console.log("Player 1 Ready:", player1Ready);
-    console.log("Player 2 Ready:", player2Ready);
-    console.log("Deck 1 Cards:", deck1Cards);
-    console.log("Deck 2 Cards:", deck2Cards);
+    if (player1Ready && player2Ready && selectedDecks.deck1 && selectedDecks.deck2) {
+      try {
+        // Convert UI cards to game cards and include deck IDs
+        const gameCards1 = deck1Cards.map(card => ({
+          ...convertToGameCard(card),
+          deck_id: selectedDecks.deck1!.id
+        }));
+        const gameCards2 = deck2Cards.map(card => ({
+          ...convertToGameCard(card),
+          deck_id: selectedDecks.deck2!.id
+        }));
 
-    if (player1Ready && player2Ready) {
-      console.log("\n=== Converting Cards for Game Engine ===");
-      // Convert UI cards to game cards
-      const gameCards1 = deck1Cards.map((card) => {
-        const gameCard = convertToGameCard(card);
-        console.log("Converted Player 1 Card:", {
-          name: gameCard.name,
-          gameplay_effects: gameCard.gameplay_effects,
-          special_effects: gameCard.special_effects,
+        setGameCards({
+          player1Cards: gameCards1,
+          player2Cards: gameCards2,
         });
-        return gameCard;
-      });
-      const gameCards2 = deck2Cards.map((card) => {
-        const gameCard = convertToGameCard(card);
-        console.log("Converted Player 2 Card:", {
-          name: gameCard.name,
-          gameplay_effects: gameCard.gameplay_effects,
-          special_effects: gameCard.special_effects,
-        });
-        return gameCard;
-      });
-
-      console.log("\n=== Setting Game Cards and Transitioning to Playing ===");
-      setGameCards({
-        player1Cards: gameCards1,
-        player2Cards: gameCards2,
-      });
-      setGameState("playing");
+        setGameState("playing");
+      } catch (error) {
+        console.error("Error converting cards:", error);
+      }
     }
   };
 
@@ -130,17 +117,21 @@ export default function PracticeMode() {
         deck1={selectedDecks.deck1!}
         deck2={selectedDecks.deck2!}
         onSetupComplete={handleSetupComplete}
-        isPracticeMode
+        mode="practice"
       />
     );
   }
 
-  if (gameState === "playing") {
+  if (gameState === "playing" && selectedDecks.deck1 && selectedDecks.deck2) {
     return (
       <GamePlay
         player1Cards={gameCards.player1Cards}
         player2Cards={gameCards.player2Cards}
+        player1DeckId={selectedDecks.deck1.id}
+        player2DeckId={selectedDecks.deck2.id}
         onGameEnd={handleGameEnd}
+        mode="practice"
+        isOnlineMatch={false}
       />
     );
   }

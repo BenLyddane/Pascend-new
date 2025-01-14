@@ -1,6 +1,7 @@
 "use client";
 
 import { Card } from "@/app/protected/play/game-engine/types";
+import { GameModeConfig } from "../../game-modes/types";
 import { GameCardPractice } from "@/components/game-card-practice";
 import { GameCard } from "@/components/game-card";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -13,8 +14,8 @@ type PlayerDeckSetupProps = {
   onCardReorder: (dragIndex: number, dropIndex: number) => void;
   onPhaseComplete: () => void;
   isReady: boolean;
-  phase: "ban" | "reorder";
-  isPracticeMode: boolean;
+  phase: "setup";
+  mode: GameModeConfig;
   playerName: string;
 };
 
@@ -26,9 +27,16 @@ export function PlayerDeckSetup({
   onPhaseComplete,
   isReady,
   phase,
-  isPracticeMode,
+  mode,
   playerName,
 }: PlayerDeckSetupProps) {
+  // Determine if banning is allowed
+  const canBan = bannedCards.length < 2;
+
+  // Determine if ready button should be disabled
+  const readyDisabled = bannedCards.length < 2 || // Need 2 bans before ready
+    (!mode.setup.requireBothPlayersReady && isReady); // In multiplayer, disable after ready
+
   return (
     <div>
       <h3 className="text-lg font-semibold mb-4">{playerName}</h3>
@@ -36,7 +44,7 @@ export function PlayerDeckSetup({
       <div className="space-y-4">
         <div>
           <h4 className="text-sm font-medium mb-2">
-            Ban Cards (Select 2)
+            {`Ban Cards (${bannedCards.length}/2)`}
           </h4>
           <div className="grid grid-cols-3 gap-4">
             {cards.map((card, index) => (
@@ -53,47 +61,44 @@ export function PlayerDeckSetup({
                       <GameCard card={card} />
                     </DialogContent>
                   </Dialog>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    className="w-full"
-                    onClick={() => onCardBan(card)}
-                    disabled={bannedCards.length >= 2 || (!isPracticeMode && phase !== "ban")}
-                  >
-                    Ban
-                  </Button>
+                  {canBan && (
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => onCardBan(card)}
+                    >
+                      Ban
+                    </Button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {(phase === "reorder" || bannedCards.length === 2) && (
+        {bannedCards.length === 2 && (
           <div>
             <h4 className="text-sm font-medium mb-2">
-              Order Remaining Cards
+              Order Your Cards
             </h4>
             <div className="flex flex-wrap gap-4">
               {cards.map((card, index) => (
                 <div
                   key={card.id}
-                  draggable={phase === "reorder"}
+                  draggable={true}
                   onDragStart={(e) => {
-                    if (phase === "reorder") {
-                      e.dataTransfer.setData("text/plain", index.toString());
-                    }
+                    e.dataTransfer.setData("text/plain", index.toString());
                   }}
-                  onDragOver={(e) => phase === "reorder" && e.preventDefault()}
+                  onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
-                    if (phase === "reorder") {
-                      e.preventDefault();
-                      const dragIndex = parseInt(
-                        e.dataTransfer.getData("text/plain")
-                      );
-                      onCardReorder(dragIndex, index);
-                    }
+                    e.preventDefault();
+                    const dragIndex = parseInt(
+                      e.dataTransfer.getData("text/plain")
+                    );
+                    onCardReorder(dragIndex, index);
                   }}
-                  className={phase === "reorder" ? "cursor-move" : ""}
+                  className="cursor-move"
                 >
                   <GameCardPractice card={card} />
                 </div>
@@ -104,16 +109,12 @@ export function PlayerDeckSetup({
 
         <button
           onClick={onPhaseComplete}
-          disabled={
-            isReady ||
-            (phase === "ban" && bannedCards.length !== 2) ||
-            (phase === "reorder" && isReady)
-          }
-          className="w-full px-4 py-2 bg-primary text-primary-foreground rounded-lg disabled:opacity-50"
+          disabled={readyDisabled}
+          className={`w-full px-4 py-2 ${
+            isReady ? "bg-green-500" : "bg-primary"
+          } text-primary-foreground rounded-lg disabled:opacity-50 transition-colors`}
         >
-          {isReady 
-            ? "Ready!" 
-            : "Ready"}
+          {isReady ? "Ready!" : "Ready"}
         </button>
       </div>
     </div>

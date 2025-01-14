@@ -1,9 +1,9 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { Card } from "@/app/protected/play/game-engine/types";
 import { Database } from "@/types/database.types";
-import { GameMode, GameModeConfig, GAME_MODES } from "../../game-modes/types";
+import { GAME_MODES, GameMode } from "../../game-modes/types";
 import { SetupPhase } from "../../game-modes/base/types";
 import { GameSetupInstructions } from "./GameSetupInstructions";
 import { GameSetupTimer } from "./GameSetupTimer";
@@ -13,28 +13,24 @@ type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
   cards: Card[];
 };
 
-type GameSetupPhaseManagerProps = {
+type MultiplayerGameSetupManagerProps = {
   deck1: Deck;
   deck2: Deck;
+  mode: Exclude<GameMode, "practice">;
   onSetupComplete: (
     deck1Cards: Card[],
     deck2Cards: Card[],
     player1Ready: boolean,
     player2Ready: boolean
   ) => void;
-  mode: GameMode;
 };
 
-export function GameSetupPhaseManager({
+export function MultiplayerGameSetupManager({
   deck1,
   deck2,
-  onSetupComplete,
   mode,
-}: GameSetupPhaseManagerProps) {
-  const [timeRemaining, setTimeRemaining] = useState(20);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-
+  onSetupComplete,
+}: MultiplayerGameSetupManagerProps) {
   // Track banned cards (2 per deck)
   const [bannedCards1, setBannedCards1] = useState<Card[]>([]);
   const [bannedCards2, setBannedCards2] = useState<Card[]>([]);
@@ -46,30 +42,6 @@ export function GameSetupPhaseManager({
   // Track if players are ready
   const [player1Ready, setPlayer1Ready] = useState(false);
   const [player2Ready, setPlayer2Ready] = useState(false);
-
-  useEffect(() => {
-    const modeConfig = GAME_MODES[mode];
-    if (!modeConfig.setup.banTimeLimit) return;
-
-    startTimeRef.current = Date.now();
-    timerRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - startTimeRef.current!) / 1000);
-      const timeLimit = modeConfig.setup.banTimeLimit || 0;
-      const remaining = Math.max(timeLimit - elapsed, 0);
-      setTimeRemaining(remaining);
-      
-      if (remaining === 0) {
-        clearInterval(timerRef.current!);
-        onSetupComplete(remainingCards1, remainingCards2, false, false);
-      }
-    }, 1000);
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-    };
-  }, [mode]);
 
   const handleCardBan = (card: Card, isDeck1: boolean) => {
     if (isDeck1) {
@@ -104,24 +76,16 @@ export function GameSetupPhaseManager({
       setPlayer2Ready(true);
     }
 
-    const modeConfig = GAME_MODES[mode];
-    // Complete setup when both players ready if required
-    if (modeConfig.setup.requireBothPlayersReady) {
-      const newPlayer1Ready = isPlayer1 ? true : player1Ready;
-      const newPlayer2Ready = isPlayer1 ? player2Ready : true;
-      if (newPlayer1Ready && newPlayer2Ready) {
-        onSetupComplete(remainingCards1, remainingCards2, true, true);
-      }
-    } else {
-      // In non-practice mode, complete immediately
-      onSetupComplete(remainingCards1, remainingCards2, isPlayer1, !isPlayer1);
+    // Complete setup when both players ready
+    if (player1Ready && player2Ready) {
+      onSetupComplete(remainingCards1, remainingCards2, true, true);
     }
   };
 
   return (
     <div className="relative">
       <GameSetupTimer 
-        timeRemaining={timeRemaining} 
+        timeRemaining={GAME_MODES[mode].setup.banTimeLimit || 0} 
         phase="setup"
         mode={GAME_MODES[mode]}
       />
@@ -139,22 +103,20 @@ export function GameSetupPhaseManager({
             isReady={player1Ready}
             phase="setup"
             mode={GAME_MODES[mode]}
-            playerName={GAME_MODES[mode].setup.requireBothPlayersReady ? "Player 1's Deck" : "Your Deck"}
+            playerName="Your Deck"
           />
 
-          {GAME_MODES[mode].setup.requireBothPlayersReady && (
-            <PlayerDeckSetup
-              cards={remainingCards2}
-              bannedCards={bannedCards2}
-              onCardBan={(card) => handleCardBan(card, false)}
-              onCardReorder={(dragIndex, dropIndex) => handleCardReorder(dragIndex, dropIndex, false)}
-              onPhaseComplete={() => handlePhaseComplete(false)}
-              isReady={player2Ready}
-              phase="setup"
-              mode={GAME_MODES[mode]}
-              playerName="Player 2's Deck"
-            />
-          )}
+          <PlayerDeckSetup
+            cards={remainingCards2}
+            bannedCards={bannedCards2}
+            onCardBan={(card) => handleCardBan(card, false)}
+            onCardReorder={(dragIndex, dropIndex) => handleCardReorder(dragIndex, dropIndex, false)}
+            onPhaseComplete={() => handlePhaseComplete(false)}
+            isReady={player2Ready}
+            phase="setup"
+            mode={GAME_MODES[mode]}
+            playerName="Opponent's Deck"
+          />
         </div>
       </div>
     </div>

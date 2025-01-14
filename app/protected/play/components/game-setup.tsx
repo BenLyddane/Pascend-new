@@ -2,7 +2,9 @@
 
 import { Card } from "@/app/protected/play/game-engine/types";
 import { Database } from "@/types/database.types";
-import { GameSetupPhaseManager } from "./game-setup/GameSetupPhaseManager";
+import { GameMode } from "../game-modes/types";
+import { PracticeGameSetupManager } from "./game-setup/PracticeGameSetupManager";
+import { MultiplayerGameSetupManager } from "./game-setup/MultiplayerGameSetupManager";
 
 type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
   cards: Card[];
@@ -17,9 +19,13 @@ type GameSetupProps = {
     player1Ready: boolean,
     player2Ready: boolean
   ) => void;
-  isPracticeMode?: boolean;
+  mode: GameMode;
 };
 
-export default function GameSetup(props: GameSetupProps) {
-  return <GameSetupPhaseManager {...props} />;
+export default function GameSetup({ mode, ...props }: GameSetupProps) {
+  return mode === 'practice' ? (
+    <PracticeGameSetupManager {...props} mode={mode} />
+  ) : (
+    <MultiplayerGameSetupManager {...props} mode={mode} />
+  );
 }

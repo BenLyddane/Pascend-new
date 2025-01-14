@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import {
-  Card,
-  Deck,
-  MatchmakingEntry,
-  MatchmakingStatus,
-} from "@/types/game.types";
+import { useState, useEffect, useCallback } from "react";
+import { GameCard, UiCard, convertToGameCard } from "@/app/protected/play/game-engine/types";
+import { Database } from "@/types/database.types";
+
+type MatchmakingEntry = Database['public']['Tables']['matchmaking_queue']['Row'];
+type MatchmakingStatus = 'waiting' | 'matched' | 'in_game' | 'completed';
+type Deck = Database['public']['Tables']['player_decks']['Row'] & {
+  cards: GameCard[];
+};
 import { createClient } from "@/utils/supabase/client";
 import {
   createQueueEntry,
@@ -16,6 +18,7 @@ import { MatchmakingQueue } from "./matchmaking-queue";
 import DeckSelector from "./deck-selector";
 import GameSetup from "./game-setup";
 import GamePlay from "./game-play";
+import { RealtimeChannel } from "@supabase/supabase-js";
 
 type MatchState = "selecting" | "queuing" | "setup" | "playing";
 
@@ -29,12 +32,14 @@ export default function Matchmaking() {
     deck: Deck;
   } | null>(null);
   const [gameCards, setGameCards] = useState<{
-    player1Cards: Card[];
-    player2Cards: Card[];
+    player1Cards: GameCard[];
+    player2Cards: GameCard[];
   }>({
     player1Cards: [],
     player2Cards: [],
   });
+  const [channel, setChannel] = useState<RealtimeChannel | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -49,14 +54,19 @@ export default function Matchmaking() {
       startMatchmaking(entry);
     } catch (error) {
       console.error("Error joining queue:", error);
+      setError("Failed to join queue");
     }
   };
 
   // Start listening for opponent
-  const startMatchmaking = async (entry: MatchmakingEntry) => {
-    // Listen for changes to the matchmaking queue
-    const channel = supabase
-      .channel("matchmaking")
+  const startMatchmaking = useCallback(async (entry: MatchmakingEntry) => {
+    // Create and subscribe to a queue channel
+    const queueChannel = supabase
+      .channel(`queue:${entry.id}`)
+      .on('presence', { event: 'sync' }, () => {
+        const state = queueChannel.presenceState<{ user_id: string; online_at: string }>();
+        console.log('Queue presence state:', state);
+      })
       .on(
         "postgres_changes",
         {
@@ -112,16 +122,40 @@ export default function Matchmaking() {
               },
             });
             setMatchState("setup");
+
+            // Create game channel
+            const gameChannel = supabase.channel(`game:${entry.id}`)
+              .on('broadcast', { event: 'game_state' }, ({ payload }) => {
+                // Handle game state updates
+                console.log('Game state update:', payload);
+              })
+              .on('broadcast', { event: 'game_end' }, ({ payload }) => {
+                // Handle game end
+                console.log('Game ended:', payload);
+              });
+
+            await gameChannel.subscribe();
+            setChannel(gameChannel);
           }
         }
-      )
-      .subscribe();
+      );
+
+    await queueChannel.subscribe(async (status) => {
+      if (status === 'SUBSCRIBED') {
+        await queueChannel.track({
+          user_id: entry.user_id,
+          online_at: new Date().toISOString(),
+        });
+      }
+    });
+
+    setChannel(queueChannel);
 
     // Cleanup function
     return () => {
-      channel.unsubscribe();
+      queueChannel.unsubscribe();
     };
-  };
+  }, [supabase]);
 
   // Leave the queue
   const handleLeaveQueue = async () => {
@@ -131,21 +165,28 @@ export default function Matchmaking() {
       await leaveQueueAction(queueEntry.id);
       setMatchState("selecting");
       setQueueEntry(null);
+      channel?.unsubscribe();
+      setChannel(null);
     } catch (error) {
       console.error("Error leaving queue:", error);
+      setError("Failed to leave queue");
     }
   };
 
   const handleSetupComplete = (
-    deck1Cards: Card[],
-    deck2Cards: Card[],
+    deck1Cards: UiCard[],
+    deck2Cards: UiCard[],
     player1Ready: boolean,
     player2Ready: boolean
   ) => {
     if (player1Ready && player2Ready) {
+      // Convert UI cards to game cards
+      const gameCards1 = deck1Cards.map(convertToGameCard);
+      const gameCards2 = deck2Cards.map(convertToGameCard);
+      
       setGameCards({
-        player1Cards: deck1Cards,
-        player2Cards: deck2Cards,
+        player1Cards: gameCards1,
+        player2Cards: gameCards2,
       });
       setMatchState("playing");
 
@@ -158,13 +199,16 @@ export default function Matchmaking() {
           })
           .eq("id", queueEntry.id)
           .then(({ error }) => {
-            if (error) console.error("Error updating game status:", error);
+            if (error) {
+              console.error("Error updating game status:", error);
+              setError("Failed to update game status");
+            }
           });
       }
     }
   };
 
-  const handleGameEnd = async (winner: 1 | 2 | "draw") => {
+  const handleGameEnd = async (winner: 1 | 2 | "draw", stats: any) => {
     if (!queueEntry) return;
 
     try {
@@ -176,11 +220,55 @@ export default function Matchmaking() {
         })
         .eq("id", queueEntry.id);
 
-      // TODO: Update player stats
-      // TODO: Handle game end UI/UX
-      console.log("Game ended with winner:", winner);
+      // Clean up channel
+      channel?.unsubscribe();
+      setChannel(null);
+
+      // Update player stats
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !opponent) return;
+
+      // Get current player stats
+      const { data: playerStats, error: statsError } = await supabase
+        .from("player_profiles")
+        .select("rank_points, total_matches, wins, losses")
+        .eq("user_id", user.id)
+        .single();
+
+      if (statsError) throw statsError;
+
+      // Calculate new stats
+      const newStats = {
+        total_matches: (playerStats?.total_matches || 0) + 1,
+        wins: (playerStats?.wins || 0) + (winner === 1 ? 1 : 0),
+        losses: (playerStats?.losses || 0) + (winner === 2 ? 1 : 0),
+        rank_points:
+          (playerStats?.rank_points || 1000) +
+          (winner === 1 ? 25 : winner === 2 ? -20 : 0),
+      };
+
+      // Update player stats
+      await supabase
+        .from("player_profiles")
+        .update(newStats)
+        .eq("user_id", user.id);
+
+      // Save match history
+      await supabase.from("match_history").insert({
+        user_id: user.id,
+        opponent_id: opponent.id,
+        match_type: "ranked",
+        result: winner === 1 ? "win" : winner === 2 ? "loss" : "draw",
+        damage_dealt: stats.totalDamageDealt,
+        cards_defeated: stats.cardsDefeated,
+        turns_played: stats.turnsPlayed,
+        special_abilities_used: stats.specialAbilitiesUsed,
+      });
     } catch (error) {
       console.error("Error handling game end:", error);
+      setError("Failed to save game results");
     }
   };
 
@@ -190,8 +278,23 @@ export default function Matchmaking() {
       if (matchState === "queuing" && queueEntry) {
         handleLeaveQueue();
       }
+      channel?.unsubscribe();
     };
-  }, [matchState, queueEntry]);
+  }, [matchState, queueEntry, channel]);
+
+  if (error) {
+    return (
+      <div className="text-red-500 p-4 rounded-lg bg-red-100">
+        Error: {error}
+        <button
+          onClick={() => setError(null)}
+          className="ml-4 px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          Dismiss
+        </button>
+      </div>
+    );
+  }
 
   if (matchState === "selecting") {
     return (
@@ -245,7 +348,7 @@ export default function Matchmaking() {
         deck1={selectedDeck!}
         deck2={opponent.deck}
         onSetupComplete={handleSetupComplete}
-        isPracticeMode={false}
+        mode="ranked"
       />
     );
   }
@@ -255,7 +358,12 @@ export default function Matchmaking() {
       <GamePlay
         player1Cards={gameCards.player1Cards}
         player2Cards={gameCards.player2Cards}
+        player1DeckId={selectedDeck!.id}
+        player2DeckId={opponent!.deck.id}
         onGameEnd={handleGameEnd}
+        mode="ranked"
+        isOnlineMatch={true}
+        opponentId={opponent?.id}
       />
     );
   }
