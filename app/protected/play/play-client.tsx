@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { PlusCircle } from "lucide-react";
 import PracticeMode from "./components/practice-mode";
 import Matchmaking from "./components/matchmaking";
 import TestMatchmaking from "./components/test-matchmaking";
@@ -13,7 +15,21 @@ export default function PlayClient() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex flex-col gap-4">
-        <h1 className="text-2xl font-bold">Play Mode</h1>
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Play Mode</h1>
+          <Button
+            asChild
+            size="lg"
+            className="bg-gradient-to-r from-green-500 to-teal-500
+                     hover:from-green-600 hover:to-teal-600
+                     text-white shadow-lg transition-all hover:scale-105"
+          >
+            <a href="/protected/collection/deck-building">
+              <PlusCircle className="mr-2 h-5 w-5" />
+              My Decks
+            </a>
+          </Button>
+        </div>
 
         <div className="grid grid-cols-3 gap-4">
           <button

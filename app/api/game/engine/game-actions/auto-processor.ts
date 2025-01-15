@@ -8,8 +8,8 @@ import {
 } from "../utils/state-converter";
 
 export class GameAutoProcessor {
-  private readonly TURN_INTERVAL = 3000; // 3 seconds for stability
-  private readonly BATCH_SIZE = 3; // Process in small batches
+  private readonly TURN_INTERVAL = 2000; // 2 seconds for better responsiveness
+  private readonly BATCH_SIZE = 1; // Process one turn at a time for real-time updates
   private readonly MAX_RETRIES = 3;
 
   constructor(
@@ -93,39 +93,39 @@ export class GameAutoProcessor {
         break;
       }
 
-      // Process a batch of turns
-      for (let i = 0; i < this.BATCH_SIZE && !gameState.winner; i++) {
-        await this.delay(this.TURN_INTERVAL);
+      // Process one turn at a time for real-time updates
+      await this.delay(this.TURN_INTERVAL);
 
-        const actionResult = gameEngine.processAction({
-          type: "END_TURN",
-          payload: {},
-        });
+      const actionResult = gameEngine.processAction({
+        type: "END_TURN",
+        payload: {},
+      });
 
-        if (!actionResult.success) {
-          console.error(
-            "[GameEngine] Error processing turn:",
-            actionResult.error
-          );
+      if (!actionResult.success) {
+        console.error(
+          "[GameEngine] Error processing turn:",
+          actionResult.error
+        );
+        break;
+      }
+
+      gameState = gameEngine.getGameState();
+      
+      // Update state immediately after each turn
+      if (!(await this.updateGameState(gameState))) {
+        // If update failed after retries, refresh state and continue
+        const { data: refreshedGame } = await this.supabase
+          .from("active_games")
+          .select("*")
+          .eq("id", this.gameId)
+          .single();
+
+        if (refreshedGame) {
+          // Create new engine instance with fresh state
+          gameState = validateAndConvertGameState(refreshedGame.game_state);
+          gameEngine = new ServerGameEngine([], [], gameState);
+        } else {
           break;
-        }
-
-        gameState = gameEngine.getGameState();
-        if (!(await this.updateGameState(gameState))) {
-          // If update failed after retries, refresh state and continue
-          const { data: refreshedGame } = await this.supabase
-            .from("active_games")
-            .select("*")
-            .eq("id", this.gameId)
-            .single();
-
-          if (refreshedGame) {
-            // Create new engine instance with fresh state
-            gameState = validateAndConvertGameState(refreshedGame.game_state);
-            gameEngine = new ServerGameEngine([], [], gameState);
-          } else {
-            break;
-          }
         }
       }
     }

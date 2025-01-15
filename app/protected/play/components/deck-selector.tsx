@@ -93,8 +93,12 @@ export default function DeckSelector({
     );
   }, [decks, searchQuery]);
 
-  const hasDeckListedCards = (deck: DeckWithCards) => {
-    return deck.cards.some(card => 
+  const isDeckEligible = (deck: DeckWithCards) => {
+    // Check if deck has exactly 5 cards
+    if (deck.cards.length !== 5) return false;
+    
+    // Check if any cards are listed for trade
+    return !deck.cards.some(card => 
       card.trade_listings?.some(listing => listing.status === "active")
     );
   };
@@ -137,14 +141,14 @@ export default function DeckSelector({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => {
-                    if (!hasDeckListedCards(deck)) {
+                    if (isDeckEligible(deck)) {
                       onDeckSelect('gameplay_effects' in deck.cards[0] ? deck : convertDeck(deck));
                     }
                   }}
                   className={`p-4 rounded-lg border-2 transition-all ${
                     selectedDeck?.id === deck.id
                       ? "border-primary bg-primary/10"
-                      : hasDeckListedCards(deck)
+                      : !isDeckEligible(deck)
                       ? "border-muted opacity-50 cursor-not-allowed"
                       : "border-muted hover:border-primary/50"
                   }`}
@@ -172,9 +176,13 @@ export default function DeckSelector({
             </div>
                 </button>
               </TooltipTrigger>
-              {hasDeckListedCards(deck) && (
+              {!isDeckEligible(deck) && (
                 <TooltipContent side="top">
-                  <p>This deck contains cards that are listed for trade and cannot be used</p>
+                  <p>
+                    {deck.cards.length !== 5 
+                      ? "Decks must have exactly 5 cards to be used in games" 
+                      : "This deck contains cards that are listed for trade and cannot be used"}
+                  </p>
                 </TooltipContent>
               )}
             </Tooltip>
