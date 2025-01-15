@@ -58,12 +58,12 @@ export function TradingCard({ card, className }: TradingCardProps) {
   return (
     <div
       className={cn(
-        "w-[280px] bg-white dark:bg-neutral-900 rounded-lg shadow-lg",
+        "w-[280px] bg-white dark:bg-neutral-950 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800",
         className
       )}
     >
       {/* Image Section */}
-      <div className={`relative w-full h-[200px] border-4 ${borderColor}`}>
+      <div className={`relative w-full h-[200px] border-4 ${borderColor} rounded-t-lg overflow-hidden`}>
         {card.image_url ? (
           <Image
             src={card.image_url}
@@ -80,16 +80,22 @@ export function TradingCard({ card, className }: TradingCardProps) {
       </div>
 
       {/* Content Section */}
-      <div className="p-4 space-y-2">
+      <div className="p-4 space-y-3">
         {/* Title and Rarity */}
         <div>
-          <h2 className="text-lg font-semibold leading-tight line-clamp-1">
+          <h2 className="text-lg font-bold leading-tight line-clamp-1 text-gray-900 dark:text-gray-100">
             {card.name}
           </h2>
           {card.rarity && (
-            <div className="flex items-center gap-1 text-sm">
-              <span>{rarityIcon}</span>
-              <span className="capitalize">{card.rarity}</span>
+            <div className="flex items-center gap-1.5 text-sm mt-1">
+              <span className="text-lg">{rarityIcon}</span>
+              <span className={cn(
+                "capitalize font-semibold",
+                card.rarity === "common" && "text-gray-500",
+                card.rarity === "rare" && "text-blue-500",
+                card.rarity === "epic" && "text-purple-500",
+                card.rarity === "legendary" && "text-red-500"
+              )}>{card.rarity}</span>
             </div>
           )}
         </div>
@@ -98,7 +104,7 @@ export function TradingCard({ card, className }: TradingCardProps) {
         <TooltipProvider delayDuration={0}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 cursor-pointer">
+              <p className="text-sm text-gray-700 dark:text-gray-200 line-clamp-2 cursor-pointer hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
                 {card.description}
               </p>
             </TooltipTrigger>
@@ -117,7 +123,7 @@ export function TradingCard({ card, className }: TradingCardProps) {
         {/* Effects */}
         {card.special_effects && card.special_effects.length > 0 && (
           <div className="relative overflow-visible">
-            <h3 className="text-sm font-semibold mb-2">Effects</h3>
+            <h3 className="text-sm font-semibold mb-2 text-gray-900 dark:text-gray-100">Effects</h3>
             <div className="flex flex-wrap gap-2">
               {card.special_effects.map((effect, index) => (
                 <TooltipProvider key={`special-${index}`} delayDuration={0}>
@@ -151,18 +157,18 @@ export function TradingCard({ card, className }: TradingCardProps) {
         )}
 
         {/* Stats */}
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="font-medium">
-            Power:{" "}
-            <span className={getGradientColor(card.power)}>{card.power}</span>
+        <div className="grid grid-cols-2 gap-3 text-sm p-3 bg-gray-50 dark:bg-neutral-900 rounded-lg">
+          <div className="font-semibold flex items-center justify-between bg-white dark:bg-neutral-800 p-2 rounded">
+            <span className="text-gray-700 dark:text-gray-300">Power</span>
+            <span className={cn("font-bold", getGradientColor(card.power))}>{card.power}</span>
           </div>
-          <div className="font-medium text-right">
-            Health:{" "}
-            <span className={getGradientColor(card.health)}>{card.health}</span>
+          <div className="font-semibold flex items-center justify-between bg-white dark:bg-neutral-800 p-2 rounded">
+            <span className="text-gray-700 dark:text-gray-300">Health</span>
+            <span className={cn("font-bold", getGradientColor(card.health))}>{card.health}</span>
           </div>
-          <div className="col-span-2 flex justify-between font-medium">
-            <span>Modifier:</span>
-            <span className={getModifierStyle(card.modifier)}>
+          <div className="col-span-2 flex justify-between font-semibold bg-white dark:bg-neutral-800 p-2 rounded">
+            <span className="text-gray-700 dark:text-gray-300">Modifier</span>
+            <span className={cn("font-bold", getModifierStyle(card.modifier))}>
               {card.modifier}
             </span>
           </div>

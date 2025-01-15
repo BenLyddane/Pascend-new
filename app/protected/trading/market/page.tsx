@@ -24,12 +24,12 @@ export default async function MarketPage() {
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Card Market</h1>
-      
-      <ListCardDialog 
-        userId={user.id} 
+
+      <ListCardDialog
+        userId={user.id}
         onListingCreated={() => {
           // Market listings will auto-refresh when a new listing is created
-        }} 
+        }}
       />
 
       <div className="mt-8">
