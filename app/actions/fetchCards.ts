@@ -17,10 +17,6 @@ export type Card = Database["public"]["Tables"]["cards"]["Row"] & {
   trade_listings?: TradeListing[];
 };
 
-export type PlayerCard = Database["public"]["Tables"]["player_cards"]["Row"] & {
-  card: Card;
-};
-
 // Helper function to merge special effects from both sources
 import { CardWithEffects } from "./fetchDecks";
 

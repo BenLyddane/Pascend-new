@@ -147,7 +147,7 @@ export default async function ProfilePage({
         <div className="flex items-center gap-6">
           <h1 className="text-3xl font-bold">Profile Settings</h1>
           <TokenDisplay 
-            tokens={profile?.tokens || 0}
+            tokens={profile?.free_tokens || 0}
             purchasedTokens={profile?.purchased_tokens || 0}
             minimal={true}
           />

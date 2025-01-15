@@ -142,16 +142,17 @@ export default function CreateCardForm({
         const supabase = createClient();
         const { data: profile } = await supabase
           .from("player_profiles")
-          .select("tokens, purchased_tokens")
+          .select("free_tokens, purchased_tokens")
           .eq("user_id", userId)
           .single();
 
         if (profile) {
-          const totalTokens = (profile.tokens || 0) + (profile.purchased_tokens || 0);
+          const totalTokens =
+            (profile.free_tokens || 0) + (profile.purchased_tokens || 0);
           setTokens({
             total: totalTokens,
             purchased: profile.purchased_tokens || 0,
-            free: profile.tokens || 0,
+            free: profile.free_tokens || 0,
           });
         }
       } catch (error) {
@@ -184,14 +185,19 @@ export default function CreateCardForm({
 
     try {
       const progressCleanup = updateProgress();
-      const newCards = await generateCards({ prompt, style, userId, usePurchasedToken });
-      
+      const newCards = await generateCards({
+        prompt,
+        style,
+        userId,
+        usePurchasedToken,
+      });
+
       // Refresh token count after generation
       const tokenData = await getUserTokens(userId);
       setTokens({
-        total: tokenData.tokens + tokenData.purchasedTokens,
-        purchased: tokenData.purchasedTokens,
-        free: tokenData.tokens,
+        total: tokenData.free_tokens + tokenData.purchased_tokens,
+        purchased: tokenData.purchased_tokens,
+        free: tokenData.free_tokens,
       });
 
       // Move current new cards to the main list
@@ -218,9 +224,9 @@ export default function CreateCardForm({
       // Revert token count on error
       const tokenData = await getUserTokens(userId);
       setTokens({
-        total: tokenData.tokens + tokenData.purchasedTokens,
-        purchased: tokenData.purchasedTokens,
-        free: tokenData.tokens,
+        total: tokenData.free_tokens + tokenData.purchased_tokens,
+        purchased: tokenData.purchased_tokens,
+        free: tokenData.free_tokens,
       });
       setError(
         error instanceof Error ? error.message : "Failed to generate cards"
@@ -273,8 +279,28 @@ export default function CreateCardForm({
     "A mischievous robot companion with a heart of gold",
     "A powerful storm elemental brewing chaos",
     "A gentle healer with mystical healing powers",
+    "A time-traveling librarian who collects forgotten stories",
+    "A retired dragon working as a cooking instructor",
+    "A star-born musician whose melodies shape reality",
+    "A clockwork fox guarding ancient mechanical secrets",
+    "A ghost archaeologist piecing together their own past",
+    "A dream weaver who mends nightmares into beautiful dreams",
+    "A celestial cartographer mapping impossible constellations",
+    "A reformed shadow thief teaching others to find their light",
+    "A quantum gardener tending to probability flowers",
+    "A memory merchant trading in precious moments",
+    "A cosmic barista brewing drinks that grant enlightenment",
+    "A digital shaman debugging corrupted souls",
+    "A paper witch crafting origami creatures that come to life",
+    "A stellar shepherd guiding lost stars back home",
+    "A dimension-hopping detective solving inter-dimensional mysteries",
+    "A crystal smith forging weapons of pure light",
+    "A void dancer performing in the spaces between worlds",
+    "A silence keeper collecting unspoken words",
+    "A rainbow alchemist distilling colors into pure emotion",
+    "A temporal tailor mending tears in the fabric of time",
+    "A cloud sculptor shaping stories in the sky",
   ];
-
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -305,7 +331,10 @@ export default function CreateCardForm({
                             if (!checked && tokens?.purchased === 0) return;
                             setUsePurchasedToken(!checked);
                           }}
-                          disabled={(usePurchasedToken && tokens?.purchased === 0) || (!usePurchasedToken && tokens?.free === 0)}
+                          disabled={
+                            (usePurchasedToken && tokens?.purchased === 0) ||
+                            (!usePurchasedToken && tokens?.free === 0)
+                          }
                         />
                         <Label htmlFor="token-type" className="text-sm">
                           Use Free Tokens
@@ -325,7 +354,9 @@ export default function CreateCardForm({
                     </div>
                   </div>
                 </div>
-                {(tokens.total === 0 || (usePurchasedToken && tokens.purchased === 0) || (!usePurchasedToken && tokens.free === 0)) && (
+                {(tokens.total === 0 ||
+                  (usePurchasedToken && tokens.purchased === 0) ||
+                  (!usePurchasedToken && tokens.free === 0)) && (
                   <Link
                     href="/protected/tokens"
                     className="text-blue-500 hover:text-blue-700 underline"

@@ -7,7 +7,7 @@ export async function getUserTokens(userId: string) {
 
   const { data, error } = await supabase
     .from("player_profiles")
-    .select("tokens, purchased_tokens")
+    .select("free_tokens, purchased_tokens")
     .eq("user_id", userId)
     .single();
 
@@ -16,8 +16,8 @@ export async function getUserTokens(userId: string) {
   }
 
   return {
-    tokens: data?.tokens ?? 0,
-    purchasedTokens: data?.purchased_tokens ?? 0,
+    free_tokens: data?.free_tokens ?? 0,
+    purchased_tokens: data?.purchased_tokens ?? 0,
   };
 }
 
@@ -91,7 +91,7 @@ export async function deductTokenForCardGeneration(
   // Get updated balances after successful deduction
   const { data: updatedProfile, error: fetchError } = await supabase
     .from("player_profiles")
-    .select("tokens, purchased_tokens")
+    .select("free_tokens, purchased_tokens")
     .eq("user_id", userId)
     .single();
 
@@ -100,7 +100,7 @@ export async function deductTokenForCardGeneration(
   }
 
   return {
-    remainingTokens: updatedProfile.tokens,
+    remainingTokens: updatedProfile.free_tokens,
     remainingPurchasedTokens: updatedProfile.purchased_tokens,
     usedPurchasedToken: usePurchasedToken,
   };

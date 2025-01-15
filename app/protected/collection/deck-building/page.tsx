@@ -1,6 +1,6 @@
 import { createClient } from "@/utils/supabase/server";
 import { DeckBuilder } from "./components/DeckBuilder";
-import { fetchCards, type PlayerCard, mergeSpecialEffects } from "@/app/actions/fetchCards";
+import { fetchCards, mergeSpecialEffects } from "@/app/actions/fetchCards";
 import { fetchDecks, type CardWithEffects } from "@/app/actions/fetchDecks";
 
 export const dynamic = "force-dynamic";
