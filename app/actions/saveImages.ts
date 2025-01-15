@@ -35,7 +35,8 @@ export async function saveImageToStorage({
     // Generate a unique filename
     const fileExt = 'jpg'; // DALL-E images are always JPG
     const fileName = `${randomUUID()}-${cardName.toLowerCase().replace(/\s+/g, '-')}.${fileExt}`;
-    const filePath = `${userId}/${fileName}`;
+    // Create a more organized path structure
+    const filePath = `${userId}/${randomUUID()}/${fileName}`;
 
     // Upload to Supabase Storage
     const { data: uploadData, error: uploadError } = await supabase
@@ -44,7 +45,7 @@ export async function saveImageToStorage({
       .upload(filePath, imageData, {
         contentType: 'image/jpeg',
         cacheControl: '3600',
-        upsert: false
+        upsert: true // Change to true to handle potential conflicts
       });
 
     if (uploadError) {
@@ -61,6 +62,10 @@ export async function saveImageToStorage({
     return publicUrl;
   } catch (error) {
     console.error('Error saving image:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     // Return original URL as fallback
     return imageUrl;
   }

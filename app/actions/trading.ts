@@ -3,8 +3,10 @@
 import { createClient } from "@/utils/supabase/server";
 import { TradeListingData, TradingCardData } from "@/app/protected/trading/types";
 import { Database } from "@/types/database.types";
+import { transformCardData } from "./trading/utils";
 
 type TradeListingStatus = Database["public"]["Enums"]["trade_listing_status"];
+type EffectType = Database["public"]["Enums"]["effect_type"];
 
 export async function listCardForTrade(
   userId: string,
@@ -195,18 +197,13 @@ export async function getActiveTradingListings(userId: string): Promise<TradeLis
     listed_at: string;
     seller_id: string;
     status: TradeListingStatus;
-    card: TradingCardData;
+    card: any;
   }>;
 
-  const listings = rawListings.map(listing => ({
+  return rawListings.map(listing => ({
     ...listing,
-    card: {
-      ...listing.card,
-      special_effects: listing.card.special_effects || []
-    }
+    card: transformCardData(listing.card)
   }));
-
-  return listings;
 }
 
 export async function getUserListings(userId: string): Promise<TradeListingData[]> {
@@ -253,18 +250,13 @@ export async function getUserListings(userId: string): Promise<TradeListingData[
     listed_at: string;
     seller_id: string;
     status: TradeListingStatus;
-    card: TradingCardData;
+    card: any;
   }>;
 
-  const listings = rawListings.map(listing => ({
+  return rawListings.map(listing => ({
     ...listing,
-    card: {
-      ...listing.card,
-      special_effects: listing.card.special_effects || []
-    }
+    card: transformCardData(listing.card)
   }));
-
-  return listings;
 }
 
 export async function getAvailableCardsForTrading(userId: string): Promise<TradingCardData[]> {
@@ -310,28 +302,8 @@ export async function getAvailableCardsForTrading(userId: string): Promise<Tradi
       trade_listings?: Array<{ status: Database["public"]["Enums"]["trade_listing_status"] }>;
     }) => !card.trade_listings?.some(listing => listing.status === "active"));
 
-    // Transform the data to match TradingCardData type
-    return availableCards.map((card: Database["public"]["Tables"]["cards"]["Row"] & {
-      card_properties?: Array<{
-        value: number | null;
-        special_properties: {
-          name: string;
-          description: string;
-          effect_type: string;
-          effect_icon: string;
-          value: number | null;
-        };
-      }>;
-    }) => ({
-      ...card,
-      special_effects: card.card_properties?.map(cp => ({
-        name: cp.special_properties.name,
-        description: cp.special_properties.description,
-        effect_type: cp.special_properties.effect_type,
-        effect_icon: cp.special_properties.effect_icon,
-        value: cp.value || cp.special_properties.value || 0
-      })) || []
-    }));
+    // Transform the data using the utility function
+    return availableCards.map(transformCardData);
   } catch (error) {
     console.error("Error in getAvailableCardsForTrading:", error);
     throw error;

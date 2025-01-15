@@ -4,7 +4,6 @@ import { Database } from "./database.types";
 type DbCard = Database["public"]["Tables"]["cards"]["Row"];
 type DbTempCard = Database["public"]["Tables"]["temp_cards"]["Row"];
 type DbSpecialProperty = Database["public"]["Tables"]["special_properties"]["Row"];
-type DbPlayerCard = Database["public"]["Tables"]["player_cards"]["Row"];
 type DbDeck = Database["public"]["Tables"]["player_decks"]["Row"];
 
 // Extract matchmaking types from database schema
@@ -109,8 +108,6 @@ export function isBaseCardEffect(value: unknown): value is BaseCardEffect {
   );
 }
 
-// Player card type
-export type PlayerCard = DbPlayerCard;
 
 // Card type
 export type Card = CardWithEffects;

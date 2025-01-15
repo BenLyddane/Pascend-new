@@ -22,8 +22,9 @@ export async function getActiveTradingListings(
     throw new Error(`Failed to fetch trade listings: ${error.message}`);
   }
 
-  const listings = (data as unknown as ListingWithCard[]).map((listing) => {
-    if (!listing.cards) {
+  const listings = (data || []).map((listing: any) => {
+    const cardData = listing.cards;
+    if (!cardData) {
       console.error("Missing card data for listing:", listing.id);
       return null;
     }
@@ -33,8 +34,8 @@ export async function getActiveTradingListings(
       token_price: listing.token_price,
       listed_at: listing.listed_at,
       seller_id: listing.seller_id,
-      status: listing.status,
-      card: transformCardData(listing.cards)
+      status: listing.status as TradeListingStatus,
+      card: transformCardData(cardData)
     };
   }).filter((listing): listing is TradeListingData => listing !== null);
 
@@ -58,8 +59,9 @@ export async function getUserListings(
     throw new Error(`Failed to fetch user listings: ${error.message}`);
   }
 
-  const listings = (data as unknown as ListingWithCard[]).map((listing) => {
-    if (!listing.cards) {
+  const listings = (data || []).map((listing: any) => {
+    const cardData = listing.cards;
+    if (!cardData) {
       console.error("Missing card data for listing:", listing.id);
       return null;
     }
@@ -69,8 +71,8 @@ export async function getUserListings(
       token_price: listing.token_price,
       listed_at: listing.listed_at,
       seller_id: listing.seller_id,
-      status: listing.status,
-      card: transformCardData(listing.cards)
+      status: listing.status as TradeListingStatus,
+      card: transformCardData(cardData)
     };
   }).filter((listing): listing is TradeListingData => listing !== null);
 

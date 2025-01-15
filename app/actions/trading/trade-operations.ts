@@ -8,7 +8,7 @@ async function getTokenBalance(userId: string): Promise<TokenBalance> {
   
   const { data, error } = await supabase
     .from("player_profiles")
-    .select("purchased_tokens")
+    .select("purchased_tokens, free_tokens")
     .eq("user_id", userId)
     .single();
 
@@ -18,26 +18,35 @@ async function getTokenBalance(userId: string): Promise<TokenBalance> {
 
   return {
     purchased_tokens: data.purchased_tokens,
-    free_tokens: 0 // Trading only uses purchased tokens
+    free_tokens: data.free_tokens
   };
 }
 
-async function validateTokenBalance(userId: string, requiredTokens: number): Promise<void> {
+async function validateTokenBalance(
+  userId: string, 
+  requiredTokens: number,
+  usePurchasedTokens: boolean
+): Promise<void> {
   const balance = await getTokenBalance(userId);
+  const availableTokens = usePurchasedTokens ? balance.purchased_tokens : balance.free_tokens;
   
-  if (balance.purchased_tokens < requiredTokens) {
-    const error = new Error("Insufficient purchased tokens") as TradeError;
+  if (availableTokens < requiredTokens) {
+    const error = new Error(
+      usePurchasedTokens 
+        ? "Insufficient purchased tokens" 
+        : "Insufficient free tokens"
+    ) as TradeError;
     error.code = "INSUFFICIENT_TOKENS";
     error.details = {
       requiredTokens,
-      availableTokens: balance.purchased_tokens,
-      isPurchasedTokensRequired: true
+      availableTokens,
+      isPurchasedTokensRequired: usePurchasedTokens
     };
     throw error;
   }
 }
 
-export async function purchaseCard(userId: string, listingId: string) {
+export async function purchaseCard(userId: string, listingId: string, usePurchasedTokens: boolean = true) {
   const supabase = await createClient();
 
   try {
@@ -57,13 +66,13 @@ export async function purchaseCard(userId: string, listingId: string) {
     }
 
     // Validate token balance before attempting purchase
-    await validateTokenBalance(userId, listing.token_price);
+    await validateTokenBalance(userId, listing.token_price, usePurchasedTokens);
 
     // Call the purchase function
     const { error } = await supabase.rpc("purchase_trade_listing", {
       p_listing_id: listingId,
       p_buyer_id: userId,
-      p_use_purchased_tokens: true
+      p_use_purchased_tokens: usePurchasedTokens
     });
 
     if (error) {

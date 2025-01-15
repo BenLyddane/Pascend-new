@@ -9,6 +9,7 @@ complete_database_export
 #NAME?
 #NAME?
 #NAME?
+#NAME?
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: card_effect_values_update on card_effect_values\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION update_card_special_effects()()\nRETURNS trigger AS $$\n
 \nBEGIN
 \n    -- Update the special_effects column in cards
@@ -31,6 +32,71 @@ complete_database_export
 \n  RETURN NEW;
 \nEND;
 \n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS check_game_state_version_trigger ON active_games;\nCREATE TRIGGER check_game_state_version_trigger\nBEFORE UPDATE\nON active_games\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION check_game_state_version()();\n"
+"\n-- TRIGGER DEFINITIONS:\n-- Trigger: handle_card_generation_tokens_trigger on token_transactions\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION handle_card_generation_tokens()()\nRETURNS trigger AS $$\n
+\ndeclare
+\n    current_free_tokens integer;
+\n    current_purchased_tokens integer;
+\nbegin
+\n    -- Only handle card generation transactions
+\n    if NEW.transaction_type = 'card_generation' then
+\n        -- Set transaction isolation to serializable to prevent race conditions
+\n        set transaction isolation level serializable;
+\n        
+\n        raise log 'Processing card generation transaction for user % with amount % (is_purchased: %)', 
+\n                  NEW.user_id, NEW.amount, NEW.is_purchased;
+\n        
+\n        -- Get current token balances
+\n        select free_tokens, purchased_tokens 
+\n        into current_free_tokens, current_purchased_tokens
+\n        from player_profiles
+\n        where user_id = NEW.user_id
+\n        for update; -- Lock the row to prevent concurrent updates
+\n        
+\n        -- Check if using purchased tokens
+\n        if NEW.is_purchased then
+\n            -- Verify purchased token balance
+\n            if current_purchased_tokens < abs(NEW.amount) then
+\n                raise exception 'Insufficient purchased tokens (current balance: %, required: %)',
+\n                    current_purchased_tokens, abs(NEW.amount);
+\n            end if;
+\n            
+\n            -- Deduct from purchased tokens
+\n            update player_profiles
+\n            set purchased_tokens = purchased_tokens + NEW.amount
+\n            where user_id = NEW.user_id;
+\n            
+\n            raise log 'Updated purchased_tokens for user %. Old balance: %, New balance: %',
+\n                NEW.user_id, current_purchased_tokens, (current_purchased_tokens + NEW.amount);
+\n        else
+\n            -- Verify free token balance
+\n            if current_free_tokens < abs(NEW.amount) then
+\n                -- If user has purchased tokens, suggest using those instead
+\n                if current_purchased_tokens >= abs(NEW.amount) then
+\n                    raise exception 'Insufficient free tokens (current balance: %). You have % purchased tokens available.',
+\n                        current_free_tokens, current_purchased_tokens;
+\n                else
+\n                    raise exception 'Insufficient free tokens (current balance: %, required: %)',
+\n                        current_free_tokens, abs(NEW.amount);
+\n                end if;
+\n            end if;
+\n            
+\n            -- Deduct from free tokens
+\n            update player_profiles
+\n            set free_tokens = free_tokens + NEW.amount
+\n            where user_id = NEW.user_id;
+\n            
+\n            raise log 'Updated free_tokens for user %. Old balance: %, New balance: %',
+\n                NEW.user_id, current_free_tokens, (current_free_tokens + NEW.amount);
+\n        end if;
+\n    end if;
+\n
+\n    return NEW;
+\nexception
+\n    when others then
+\n        raise log 'Error in handle_card_generation_tokens: %', SQLERRM;
+\n        raise;
+\nend;
+\n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS handle_card_generation_tokens_trigger ON token_transactions;\nCREATE TRIGGER handle_card_generation_tokens_trigger\nAFTER INSERT\nON token_transactions\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION handle_card_generation_tokens()();\n"
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: log_token_transaction on token_transactions\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION log_token_transaction()()\nRETURNS trigger AS $$\n
 \nbegin
 \n    raise log 'New token transaction: %', row_to_json(NEW);
@@ -587,6 +653,71 @@ complete_database_export
 \n    return NEW;
 \nend;
 \n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: handle_card_generation_tokens\nCREATE OR REPLACE FUNCTION public.handle_card_generation_tokens()\nRETURNS trigger\nAS $$\n
+\ndeclare
+\n    current_free_tokens integer;
+\n    current_purchased_tokens integer;
+\nbegin
+\n    -- Only handle card generation transactions
+\n    if NEW.transaction_type = 'card_generation' then
+\n        -- Set transaction isolation to serializable to prevent race conditions
+\n        set transaction isolation level serializable;
+\n        
+\n        raise log 'Processing card generation transaction for user % with amount % (is_purchased: %)', 
+\n                  NEW.user_id, NEW.amount, NEW.is_purchased;
+\n        
+\n        -- Get current token balances
+\n        select free_tokens, purchased_tokens 
+\n        into current_free_tokens, current_purchased_tokens
+\n        from player_profiles
+\n        where user_id = NEW.user_id
+\n        for update; -- Lock the row to prevent concurrent updates
+\n        
+\n        -- Check if using purchased tokens
+\n        if NEW.is_purchased then
+\n            -- Verify purchased token balance
+\n            if current_purchased_tokens < abs(NEW.amount) then
+\n                raise exception 'Insufficient purchased tokens (current balance: %, required: %)',
+\n                    current_purchased_tokens, abs(NEW.amount);
+\n            end if;
+\n            
+\n            -- Deduct from purchased tokens
+\n            update player_profiles
+\n            set purchased_tokens = purchased_tokens + NEW.amount
+\n            where user_id = NEW.user_id;
+\n            
+\n            raise log 'Updated purchased_tokens for user %. Old balance: %, New balance: %',
+\n                NEW.user_id, current_purchased_tokens, (current_purchased_tokens + NEW.amount);
+\n        else
+\n            -- Verify free token balance
+\n            if current_free_tokens < abs(NEW.amount) then
+\n                -- If user has purchased tokens, suggest using those instead
+\n                if current_purchased_tokens >= abs(NEW.amount) then
+\n                    raise exception 'Insufficient free tokens (current balance: %). You have % purchased tokens available.',
+\n                        current_free_tokens, current_purchased_tokens;
+\n                else
+\n                    raise exception 'Insufficient free tokens (current balance: %, required: %)',
+\n                        current_free_tokens, abs(NEW.amount);
+\n                end if;
+\n            end if;
+\n            
+\n            -- Deduct from free tokens
+\n            update player_profiles
+\n            set free_tokens = free_tokens + NEW.amount
+\n            where user_id = NEW.user_id;
+\n            
+\n            raise log 'Updated free_tokens for user %. Old balance: %, New balance: %',
+\n                NEW.user_id, current_free_tokens, (current_free_tokens + NEW.amount);
+\n        end if;
+\n    end if;
+\n
+\n    return NEW;
+\nexception
+\n    when others then
+\n        raise log 'Error in handle_card_generation_tokens: %', SQLERRM;
+\n        raise;
+\nend;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: update_collection_stats\nCREATE OR REPLACE FUNCTION public.update_collection_stats()\nRETURNS trigger\nAS $$\n
 \nBEGIN
 \n    INSERT INTO public.collection_stats (
@@ -746,6 +877,7 @@ complete_database_export
 \n-- Grants for function: get_card_effects\nGRANT EXECUTE ON FUNCTION public.get_card_effects(p_card_id uuid) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: get_effect_value\nGRANT EXECUTE ON FUNCTION public.get_effect_value(effect_data jsonb) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: get_valid_properties_for_rarity\nGRANT EXECUTE ON FUNCTION public.get_valid_properties_for_rarity(card_rarity text) TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: handle_card_generation_tokens\nGRANT EXECUTE ON FUNCTION public.handle_card_generation_tokens() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: handle_new_stripe_user\nGRANT EXECUTE ON FUNCTION public.handle_new_stripe_user() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: handle_new_user\nGRANT EXECUTE ON FUNCTION public.handle_new_user() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: log_token_transaction\nGRANT EXECUTE ON FUNCTION public.log_token_transaction() TO PUBLIC, anon, authenticated, postgres, service_role;

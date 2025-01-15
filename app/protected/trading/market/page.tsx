@@ -21,21 +21,19 @@ export default async function MarketPage() {
     .eq("user_id", user.id)
     .single();
 
-  const tokens = profile?.free_tokens ?? 0;
-  const purchasedTokens = profile?.purchased_tokens ?? 0;
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">Card Market</h1>
       
-      <ListCardDialog userId={user.id} />
+      <ListCardDialog 
+        userId={user.id} 
+        onListingCreated={() => {
+          // Market listings will auto-refresh when a new listing is created
+        }} 
+      />
 
       <div className="mt-8">
-        <MarketListings 
-          userId={user.id} 
-          tokens={tokens} 
-          purchasedTokens={purchasedTokens} 
-        />
+        <MarketListings userId={user.id} />
       </div>
     </div>
   );

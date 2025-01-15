@@ -7,18 +7,20 @@ export type DbCardProperty = Database["public"]["Tables"]["card_properties"]["Ro
 export type DbSpecialProperty = Database["public"]["Tables"]["special_properties"]["Row"];
 export type DbPlayerProfile = Database["public"]["Tables"]["player_profiles"]["Row"];
 
+type EffectType = Database["public"]["Enums"]["effect_type"];
+
 export interface CardSpecialEffect {
   name: string;
   description: string;
-  effect_type: string;
+  effect_type: EffectType;
   effect_icon: string;
-  value: number | null;
+  value: number;
 }
 
 export interface CardWithProperties extends DbCard {
   card_properties?: Array<{
     value: number | null;
-    special_properties: CardSpecialEffect;
+    special_properties: DbSpecialProperty;
   }>;
 }
 

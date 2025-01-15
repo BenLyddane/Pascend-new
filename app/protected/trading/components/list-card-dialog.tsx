@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,12 @@ import { TradingCardData } from "../types";
 import {
   listCardForTrade,
   getAvailableCardsForTrading,
+  checkCardTradeEligibility,
 } from "@/app/actions/trading";
+import { TradeError } from "@/app/actions/trading/types";
+
+const MIN_LISTING_PRICE = 2;
+const MAX_LISTING_PRICE = 1000;
 import { Loader2, Plus, Search } from "lucide-react";
 
 interface ListCardDialogProps {
@@ -80,10 +85,10 @@ export function ListCardDialog({
 
     // Ensure the price is a whole number
     const price = Math.floor(parseFloat(tokenPrice));
-    if (isNaN(price) || price < 2 || price !== parseFloat(tokenPrice)) {
+    if (isNaN(price) || price < MIN_LISTING_PRICE || price > MAX_LISTING_PRICE || price !== parseFloat(tokenPrice)) {
       toast({
         title: "Invalid price",
-        description: "Price must be a whole number of at least 2 tokens",
+        description: `Price must be a whole number between ${MIN_LISTING_PRICE} and ${MAX_LISTING_PRICE} tokens`,
         variant: "destructive",
       });
       return;
@@ -91,6 +96,12 @@ export function ListCardDialog({
 
     setIsListing(true);
     try {
+      // Check card eligibility first
+      const { eligible, reason } = await checkCardTradeEligibility(userId, selectedCard.id);
+      if (!eligible && reason) {
+        throw new Error(reason);
+      }
+
       await listCardForTrade(userId, selectedCard.id, price);
       toast({
         title: "Success",
@@ -99,11 +110,30 @@ export function ListCardDialog({
       onListingCreated();
       setIsOpen(false);
       setSelectedCard(null);
-      setTokenPrice("2");
-    } catch (error: any) {
+      setTokenPrice(MIN_LISTING_PRICE.toString());
+    } catch (error) {
+      const tradeError = error as TradeError;
+      let errorMessage = "Failed to list card";
+      
+      if (tradeError.code === "INSUFFICIENT_TOKENS") {
+        errorMessage = "You don't have enough tokens to list this card";
+      } else if (tradeError.code === "CARD_NOT_FOUND") {
+        errorMessage = "Card not found";
+      } else if (tradeError.code === "NOT_OWNER") {
+        errorMessage = "You don't own this card";
+      } else if (tradeError.code === "FREE_TOKEN_CARD") {
+        errorMessage = "This card cannot be traded (generated with free tokens)";
+      } else if (tradeError.code === "CARD_INACTIVE") {
+        errorMessage = "This card is not active";
+      } else if (tradeError.code === "ALREADY_LISTED") {
+        errorMessage = "This card is already listed";
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+
       toast({
         title: "Error",
-        description: error.message || "Failed to list card",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
@@ -168,27 +198,31 @@ export function ListCardDialog({
                       <label className="text-sm font-medium mb-2 block">
                         Token Price (Minimum 2)
                       </label>
-                      <Input
-                        type="text"
-                        pattern="\d*"
-                        min="2"
-                        value={tokenPrice}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === "" || /^\d+$/.test(value)) {
-                            setTokenPrice(value);
-                          }
-                        }}
-                        onBlur={() => {
-                          const value = parseInt(tokenPrice);
-                          if (!isNaN(value) && value >= 2) {
-                            setTokenPrice(value.toString());
-                          } else {
-                            setTokenPrice("2");
-                          }
-                        }}
-                        placeholder="Enter token price (whole numbers only)"
-                      />
+              <Input
+                type="text"
+                pattern="\d*"
+                min={MIN_LISTING_PRICE}
+                max={MAX_LISTING_PRICE}
+                value={tokenPrice}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (value === "" || /^\d+$/.test(value)) {
+                    const numValue = parseInt(value);
+                    if (!value || (numValue >= MIN_LISTING_PRICE && numValue <= MAX_LISTING_PRICE)) {
+                      setTokenPrice(value);
+                    }
+                  }
+                }}
+                onBlur={() => {
+                  const value = parseInt(tokenPrice);
+                  if (!isNaN(value) && value >= MIN_LISTING_PRICE && value <= MAX_LISTING_PRICE) {
+                    setTokenPrice(value.toString());
+                  } else {
+                    setTokenPrice(MIN_LISTING_PRICE.toString());
+                  }
+                }}
+                placeholder={`Enter token price (${MIN_LISTING_PRICE}-${MAX_LISTING_PRICE})`}
+              />
                     </div>
                     <Button
                       onClick={handleListCard}
