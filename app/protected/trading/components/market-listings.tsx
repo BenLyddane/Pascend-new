@@ -87,7 +87,7 @@ export function MarketListings({ userId }: MarketListingsProps) {
 
     setIsLoading(true);
     try {
-      await purchaseCard(userId, listingId);
+      await purchaseCard(userId, listingId, true); // Explicitly use purchased tokens
       toast({
         title: "Success",
         description: "Card purchased successfully",

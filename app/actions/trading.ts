@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { TradeListingData, TradingCardData } from "@/app/protected/trading/types";
 import { Database } from "@/types/database.types";
-import { transformCardData } from "./trading/utils";
+import { transformCardData, CARD_PROPERTIES_QUERY } from "./trading/utils";
 
 type TradeListingStatus = Database["public"]["Enums"]["trade_listing_status"];
 type EffectType = Database["public"]["Enums"]["effect_type"];
@@ -40,54 +40,14 @@ export async function listCardForTrade(
   }
 
   try {
-    // Start a transaction
-    const { error: beginError } = await supabase.rpc('begin_transaction');
-    if (beginError) throw beginError;
+    // Create new listing using the database function
+    const { error: listingError } = await supabase.rpc("create_trade_listing", {
+      p_card_id: cardId,
+      p_seller_id: userId,
+      p_token_price: tokenPrice
+    });
 
-    try {
-      // Delete any cancelled listings for this card
-      const { error: deleteError } = await supabase
-        .from("trade_listings")
-        .delete()
-        .eq("card_id", cardId)
-        .eq("seller_id", userId)
-        .eq("status", "cancelled" as TradeListingStatus);
-
-      if (deleteError) throw deleteError;
-
-      // Check if card is already actively listed
-      const { data: existingListing } = await supabase
-        .from("trade_listings")
-        .select("id")
-        .eq("card_id", cardId)
-        .eq("status", "active" as TradeListingStatus)
-        .single();
-
-      if (existingListing) {
-        throw new Error("Card is already listed for trade");
-      }
-
-      // Create new listing
-      const { error: listingError } = await supabase.rpc("create_trade_listing", {
-        p_card_id: cardId,
-        p_seller_id: userId,
-        p_token_price: tokenPrice
-      });
-
-      if (listingError) throw listingError;
-
-      // Commit the transaction
-      const { error: commitError } = await supabase.rpc('commit_transaction');
-      if (commitError) throw commitError;
-
-    } catch (error) {
-      // Rollback on any error
-      const { error: rollbackError } = await supabase.rpc('rollback_transaction');
-      if (rollbackError) {
-        console.error("Error rolling back transaction:", rollbackError);
-      }
-      throw error;
-    }
+    if (listingError) throw listingError;
   } catch (error) {
     console.error("Error in listCardForTrade:", error);
     throw new Error("Failed to create listing: " + (error as Error).message);
@@ -96,7 +56,8 @@ export async function listCardForTrade(
 
 export async function purchaseCard(
   userId: string,
-  listingId: string
+  listingId: string,
+  usePurchasedTokens: boolean = true // Default to using purchased tokens
 ) {
   const supabase = await createClient();
 
@@ -104,7 +65,8 @@ export async function purchaseCard(
     // Call the purchase function (handles all validation and transaction logic)
     const { error } = await supabase.rpc("purchase_trade_listing", {
       p_listing_id: listingId,
-      p_buyer_id: userId
+      p_buyer_id: userId,
+      p_use_purchased_tokens: usePurchasedTokens
     });
 
     if (error) {
@@ -163,47 +125,37 @@ export async function getActiveTradingListings(userId: string): Promise<TradeLis
       listed_at,
       seller_id,
       status,
-      card:cards (
-        id,
-        name,
-        description,
-        image_url,
-        rarity,
-        power,
-        health,
-        modifier,
-        special_effects,
-        created_at,
-        edition,
-        generated_with_purchased_tokens,
-        is_active,
-        user_id,
-        special_properties,
-        keywords
+      card:cards!trade_listings_card_id_fkey (
+        ${CARD_PROPERTIES_QUERY}
       )
     `)
-    .eq("status", "active" as TradeListingStatus)
+    .eq("status", "active")
     .neq("seller_id", userId) // Don't show user's own listings
     .order("listed_at", { ascending: false });
 
   if (error) {
-    throw new Error("Failed to fetch trade listings");
+    console.error("Error fetching trade listings:", error);
+    throw new Error(`Failed to fetch trade listings: ${error.message}`);
   }
 
-  // Transform the data to ensure it matches our expected type
-  const rawListings = data as unknown as Array<{
-    id: string;
-    token_price: number;
-    listed_at: string;
-    seller_id: string;
-    status: TradeListingStatus;
-    card: any;
-  }>;
+  const listings = (data || []).map((listing: any) => {
+    const cardData = listing.card;
+    if (!cardData) {
+      console.error("Missing card data for listing:", listing.id);
+      return null;
+    }
 
-  return rawListings.map(listing => ({
-    ...listing,
-    card: transformCardData(listing.card)
-  }));
+    return {
+      id: listing.id,
+      token_price: listing.token_price,
+      listed_at: listing.listed_at,
+      seller_id: listing.seller_id,
+      status: listing.status as TradeListingStatus,
+      card: transformCardData(cardData)
+    };
+  }).filter((listing): listing is TradeListingData => listing !== null);
+
+  return listings;
 }
 
 export async function getUserListings(userId: string): Promise<TradeListingData[]> {
@@ -217,46 +169,36 @@ export async function getUserListings(userId: string): Promise<TradeListingData[
       listed_at,
       seller_id,
       status,
-      card:cards (
-        id,
-        name,
-        description,
-        image_url,
-        rarity,
-        power,
-        health,
-        modifier,
-        special_effects,
-        created_at,
-        edition,
-        generated_with_purchased_tokens,
-        is_active,
-        user_id,
-        special_properties,
-        keywords
+      card:cards!trade_listings_card_id_fkey (
+        ${CARD_PROPERTIES_QUERY}
       )
     `)
     .eq("seller_id", userId)
     .order("listed_at", { ascending: false });
 
   if (error) {
-    throw new Error("Failed to fetch user listings");
+    console.error("Error fetching user listings:", error);
+    throw new Error(`Failed to fetch user listings: ${error.message}`);
   }
 
-  // Transform the data to ensure it matches our expected type
-  const rawListings = data as unknown as Array<{
-    id: string;
-    token_price: number;
-    listed_at: string;
-    seller_id: string;
-    status: TradeListingStatus;
-    card: any;
-  }>;
+  const listings = (data || []).map((listing: any) => {
+    const cardData = listing.card;
+    if (!cardData) {
+      console.error("Missing card data for listing:", listing.id);
+      return null;
+    }
 
-  return rawListings.map(listing => ({
-    ...listing,
-    card: transformCardData(listing.card)
-  }));
+    return {
+      id: listing.id,
+      token_price: listing.token_price,
+      listed_at: listing.listed_at,
+      seller_id: listing.seller_id,
+      status: listing.status as TradeListingStatus,
+      card: transformCardData(cardData)
+    };
+  }).filter((listing): listing is TradeListingData => listing !== null);
+
+  return listings;
 }
 
 export async function getAvailableCardsForTrading(userId: string): Promise<TradingCardData[]> {

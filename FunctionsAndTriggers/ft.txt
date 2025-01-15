@@ -33,69 +33,62 @@ complete_database_export
 \nEND;
 \n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS check_game_state_version_trigger ON active_games;\nCREATE TRIGGER check_game_state_version_trigger\nBEFORE UPDATE\nON active_games\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION check_game_state_version()();\n"
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: handle_card_generation_tokens_trigger on token_transactions\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION handle_card_generation_tokens()()\nRETURNS trigger AS $$\n
-\ndeclare
+\nDECLARE
 \n    current_free_tokens integer;
 \n    current_purchased_tokens integer;
-\nbegin
-\n    -- Only handle card generation transactions
-\n    if NEW.transaction_type = 'card_generation' then
-\n        -- Set transaction isolation to serializable to prevent race conditions
-\n        set transaction isolation level serializable;
+\nBEGIN
+\n    -- Get current token balances with row lock
+\n    SELECT free_tokens, purchased_tokens 
+\n    INTO current_free_tokens, current_purchased_tokens
+\n    FROM player_profiles
+\n    WHERE user_id = NEW.user_id
+\n    FOR UPDATE;
+\n    
+\n    -- Log the current state
+\n    RAISE LOG 'Processing card generation for user %. Current balances - Free: %, Purchased: %', 
+\n        NEW.user_id, current_free_tokens, current_purchased_tokens;
+\n    
+\n    -- Check if using purchased tokens
+\n    IF NEW.is_purchased THEN
+\n        -- Verify purchased token balance
+\n        IF current_purchased_tokens < ABS(NEW.amount) THEN
+\n            RAISE EXCEPTION 'Insufficient purchased tokens (current balance: %)', current_purchased_tokens;
+\n        END IF;
 \n        
-\n        raise log 'Processing card generation transaction for user % with amount % (is_purchased: %)', 
-\n                  NEW.user_id, NEW.amount, NEW.is_purchased;
+\n        -- Deduct from purchased tokens
+\n        UPDATE player_profiles
+\n        SET purchased_tokens = purchased_tokens + NEW.amount
+\n        WHERE user_id = NEW.user_id;
 \n        
-\n        -- Get current token balances
-\n        select free_tokens, purchased_tokens 
-\n        into current_free_tokens, current_purchased_tokens
-\n        from player_profiles
-\n        where user_id = NEW.user_id
-\n        for update; -- Lock the row to prevent concurrent updates
+\n        RAISE LOG 'Updated purchased tokens for user %. New balance: %', 
+\n            NEW.user_id, (current_purchased_tokens + NEW.amount);
+\n    ELSE
+\n        -- Verify free token balance
+\n        IF current_free_tokens < ABS(NEW.amount) THEN
+\n            IF current_purchased_tokens >= ABS(NEW.amount) THEN
+\n                RAISE EXCEPTION 'Insufficient free tokens (current balance: %). Purchased tokens available: %', 
+\n                    current_free_tokens, current_purchased_tokens;
+\n            ELSE
+\n                RAISE EXCEPTION 'Insufficient free tokens (current balance: %)', current_free_tokens;
+\n            END IF;
+\n        END IF;
 \n        
-\n        -- Check if using purchased tokens
-\n        if NEW.is_purchased then
-\n            -- Verify purchased token balance
-\n            if current_purchased_tokens < abs(NEW.amount) then
-\n                raise exception 'Insufficient purchased tokens (current balance: %, required: %)',
-\n                    current_purchased_tokens, abs(NEW.amount);
-\n            end if;
-\n            
-\n            -- Deduct from purchased tokens
-\n            update player_profiles
-\n            set purchased_tokens = purchased_tokens + NEW.amount
-\n            where user_id = NEW.user_id;
-\n            
-\n            raise log 'Updated purchased_tokens for user %. Old balance: %, New balance: %',
-\n                NEW.user_id, current_purchased_tokens, (current_purchased_tokens + NEW.amount);
-\n        else
-\n            -- Verify free token balance
-\n            if current_free_tokens < abs(NEW.amount) then
-\n                -- If user has purchased tokens, suggest using those instead
-\n                if current_purchased_tokens >= abs(NEW.amount) then
-\n                    raise exception 'Insufficient free tokens (current balance: %). You have % purchased tokens available.',
-\n                        current_free_tokens, current_purchased_tokens;
-\n                else
-\n                    raise exception 'Insufficient free tokens (current balance: %, required: %)',
-\n                        current_free_tokens, abs(NEW.amount);
-\n                end if;
-\n            end if;
-\n            
-\n            -- Deduct from free tokens
-\n            update player_profiles
-\n            set free_tokens = free_tokens + NEW.amount
-\n            where user_id = NEW.user_id;
-\n            
-\n            raise log 'Updated free_tokens for user %. Old balance: %, New balance: %',
-\n                NEW.user_id, current_free_tokens, (current_free_tokens + NEW.amount);
-\n        end if;
-\n    end if;
+\n        -- Deduct from free tokens
+\n        UPDATE player_profiles
+\n        SET free_tokens = free_tokens + NEW.amount
+\n        WHERE user_id = NEW.user_id;
+\n        
+\n        RAISE LOG 'Updated free tokens for user %. New balance: %', 
+\n            NEW.user_id, (current_free_tokens + NEW.amount);
+\n    END IF;
 \n
-\n    return NEW;
-\nexception
-\n    when others then
-\n        raise log 'Error in handle_card_generation_tokens: %', SQLERRM;
-\n        raise;
-\nend;
+\n    RETURN NEW;
+\nEXCEPTION
+\n    WHEN OTHERS THEN
+\n        -- Log the error details
+\n        RAISE LOG 'Error in handle_card_generation_tokens: %', SQLERRM;
+\n        RAISE;
+\nEND;
 \n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS handle_card_generation_tokens_trigger ON token_transactions;\nCREATE TRIGGER handle_card_generation_tokens_trigger\nAFTER INSERT\nON token_transactions\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION handle_card_generation_tokens()();\n"
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: log_token_transaction on token_transactions\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION log_token_transaction()()\nRETURNS trigger AS $$\n
 \nbegin
@@ -331,85 +324,6 @@ complete_database_export
 \n  returning id into v_listing_id;
 \n
 \n  return v_listing_id;
-\nend;
-\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
-"\n-- Function: purchase_trade_listing\nCREATE OR REPLACE FUNCTION public.purchase_trade_listing(p_listing_id uuid, p_buyer_id uuid, p_use_purchased_tokens boolean DEFAULT false)\nRETURNS void\nAS $$\n
-\ndeclare
-\n    v_token_price integer;
-\n    v_seller_id uuid;
-\n    v_card_id uuid;
-\nbegin
-\n    -- Get listing details and lock the row
-\n    select token_price, seller_id, card_id
-\n    into v_token_price, v_seller_id, v_card_id
-\n    from trade_listings
-\n    where id = p_listing_id
-\n    and status = 'active'
-\n    for update;
-\n
-\n    -- Check if listing exists and is active
-\n    if not found then
-\n        raise exception 'Listing not found or is not active';
-\n    end if;
-\n
-\n    -- Check if buyer has enough tokens
-\n    if p_use_purchased_tokens then
-\n        if not exists (
-\n            select 1
-\n            from player_profiles
-\n            where user_id = p_buyer_id
-\n            and purchased_tokens >= v_token_price
-\n        ) then
-\n            raise exception 'Insufficient purchased tokens';
-\n        end if;
-\n    else
-\n        if not exists (
-\n            select 1
-\n            from player_profiles
-\n            where user_id = p_buyer_id
-\n            and free_tokens >= v_token_price
-\n        ) then
-\n            raise exception 'Insufficient tokens';
-\n        end if;
-\n    end if;
-\n
-\n    -- Begin transaction
-\n    -- 1. Deduct tokens from buyer
-\n    if p_use_purchased_tokens then
-\n        update player_profiles
-\n        set purchased_tokens = purchased_tokens - v_token_price
-\n        where user_id = p_buyer_id;
-\n    else
-\n        update player_profiles
-\n        set free_tokens = free_tokens - v_token_price
-\n        where user_id = p_buyer_id;
-\n    end if;
-\n
-\n    -- 2. Add tokens to seller (minus 1 token fee)
-\n    update player_profiles
-\n    set free_tokens = free_tokens + (v_token_price - 1)
-\n    where user_id = v_seller_id;
-\n
-\n    -- 3. Transfer card ownership
-\n    update cards
-\n    set user_id = p_buyer_id
-\n    where id = v_card_id;
-\n
-\n    -- 4. Update listing status
-\n    update trade_listings
-\n    set status = 'sold'
-\n    where id = p_listing_id;
-\n
-\n    -- Create transaction records
-\n    insert into token_transactions (
-\n        user_id,
-\n        amount,
-\n        transaction_type,
-\n        is_purchased,
-\n        description
-\n    ) values
-\n    (p_buyer_id, -v_token_price, 'trade_purchase', p_use_purchased_tokens, 'Card purchase from marketplace'),
-\n    (v_seller_id, v_token_price - 1, 'trade_sale', false, 'Card sold on marketplace (1 token fee)');
 \nend;
 \n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: check_game_state_version\nCREATE OR REPLACE FUNCTION public.check_game_state_version()\nRETURNS trigger\nAS $$\n
@@ -654,68 +568,149 @@ complete_database_export
 \nend;
 \n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: handle_card_generation_tokens\nCREATE OR REPLACE FUNCTION public.handle_card_generation_tokens()\nRETURNS trigger\nAS $$\n
-\ndeclare
+\nDECLARE
 \n    current_free_tokens integer;
 \n    current_purchased_tokens integer;
+\nBEGIN
+\n    -- Get current token balances with row lock
+\n    SELECT free_tokens, purchased_tokens 
+\n    INTO current_free_tokens, current_purchased_tokens
+\n    FROM player_profiles
+\n    WHERE user_id = NEW.user_id
+\n    FOR UPDATE;
+\n    
+\n    -- Log the current state
+\n    RAISE LOG 'Processing card generation for user %. Current balances - Free: %, Purchased: %', 
+\n        NEW.user_id, current_free_tokens, current_purchased_tokens;
+\n    
+\n    -- Check if using purchased tokens
+\n    IF NEW.is_purchased THEN
+\n        -- Verify purchased token balance
+\n        IF current_purchased_tokens < ABS(NEW.amount) THEN
+\n            RAISE EXCEPTION 'Insufficient purchased tokens (current balance: %)', current_purchased_tokens;
+\n        END IF;
+\n        
+\n        -- Deduct from purchased tokens
+\n        UPDATE player_profiles
+\n        SET purchased_tokens = purchased_tokens + NEW.amount
+\n        WHERE user_id = NEW.user_id;
+\n        
+\n        RAISE LOG 'Updated purchased tokens for user %. New balance: %', 
+\n            NEW.user_id, (current_purchased_tokens + NEW.amount);
+\n    ELSE
+\n        -- Verify free token balance
+\n        IF current_free_tokens < ABS(NEW.amount) THEN
+\n            IF current_purchased_tokens >= ABS(NEW.amount) THEN
+\n                RAISE EXCEPTION 'Insufficient free tokens (current balance: %). Purchased tokens available: %', 
+\n                    current_free_tokens, current_purchased_tokens;
+\n            ELSE
+\n                RAISE EXCEPTION 'Insufficient free tokens (current balance: %)', current_free_tokens;
+\n            END IF;
+\n        END IF;
+\n        
+\n        -- Deduct from free tokens
+\n        UPDATE player_profiles
+\n        SET free_tokens = free_tokens + NEW.amount
+\n        WHERE user_id = NEW.user_id;
+\n        
+\n        RAISE LOG 'Updated free tokens for user %. New balance: %', 
+\n            NEW.user_id, (current_free_tokens + NEW.amount);
+\n    END IF;
+\n
+\n    RETURN NEW;
+\nEXCEPTION
+\n    WHEN OTHERS THEN
+\n        -- Log the error details
+\n        RAISE LOG 'Error in handle_card_generation_tokens: %', SQLERRM;
+\n        RAISE;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: purchase_trade_listing\nCREATE OR REPLACE FUNCTION public.purchase_trade_listing(p_listing_id uuid, p_buyer_id uuid, p_use_purchased_tokens boolean DEFAULT false)\nRETURNS void\nAS $$\n
+\ndeclare
+\n    v_token_price integer;
+\n    v_seller_id uuid;
+\n    v_card_id uuid;
 \nbegin
-\n    -- Only handle card generation transactions
-\n    if NEW.transaction_type = 'card_generation' then
-\n        -- Set transaction isolation to serializable to prevent race conditions
-\n        set transaction isolation level serializable;
-\n        
-\n        raise log 'Processing card generation transaction for user % with amount % (is_purchased: %)', 
-\n                  NEW.user_id, NEW.amount, NEW.is_purchased;
-\n        
-\n        -- Get current token balances
-\n        select free_tokens, purchased_tokens 
-\n        into current_free_tokens, current_purchased_tokens
-\n        from player_profiles
-\n        where user_id = NEW.user_id
-\n        for update; -- Lock the row to prevent concurrent updates
-\n        
-\n        -- Check if using purchased tokens
-\n        if NEW.is_purchased then
-\n            -- Verify purchased token balance
-\n            if current_purchased_tokens < abs(NEW.amount) then
-\n                raise exception 'Insufficient purchased tokens (current balance: %, required: %)',
-\n                    current_purchased_tokens, abs(NEW.amount);
-\n            end if;
-\n            
-\n            -- Deduct from purchased tokens
-\n            update player_profiles
-\n            set purchased_tokens = purchased_tokens + NEW.amount
-\n            where user_id = NEW.user_id;
-\n            
-\n            raise log 'Updated purchased_tokens for user %. Old balance: %, New balance: %',
-\n                NEW.user_id, current_purchased_tokens, (current_purchased_tokens + NEW.amount);
-\n        else
-\n            -- Verify free token balance
-\n            if current_free_tokens < abs(NEW.amount) then
-\n                -- If user has purchased tokens, suggest using those instead
-\n                if current_purchased_tokens >= abs(NEW.amount) then
-\n                    raise exception 'Insufficient free tokens (current balance: %). You have % purchased tokens available.',
-\n                        current_free_tokens, current_purchased_tokens;
-\n                else
-\n                    raise exception 'Insufficient free tokens (current balance: %, required: %)',
-\n                        current_free_tokens, abs(NEW.amount);
-\n                end if;
-\n            end if;
-\n            
-\n            -- Deduct from free tokens
-\n            update player_profiles
-\n            set free_tokens = free_tokens + NEW.amount
-\n            where user_id = NEW.user_id;
-\n            
-\n            raise log 'Updated free_tokens for user %. Old balance: %, New balance: %',
-\n                NEW.user_id, current_free_tokens, (current_free_tokens + NEW.amount);
+\n    -- Get listing details and lock the row
+\n    select token_price, seller_id, card_id
+\n    into v_token_price, v_seller_id, v_card_id
+\n    from trade_listings
+\n    where id = p_listing_id
+\n    and status = 'active'
+\n    for update;
+\n
+\n    -- Check if listing exists and is active
+\n    if not found then
+\n        raise exception 'Listing not found or is not active';
+\n    end if;
+\n
+\n    -- Check if buyer has enough tokens
+\n    if p_use_purchased_tokens then
+\n        if not exists (
+\n            select 1
+\n            from player_profiles
+\n            where user_id = p_buyer_id
+\n            and purchased_tokens >= v_token_price
+\n        ) then
+\n            raise exception 'Insufficient purchased tokens';
+\n        end if;
+\n    else
+\n        if not exists (
+\n            select 1
+\n            from player_profiles
+\n            where user_id = p_buyer_id
+\n            and free_tokens >= v_token_price
+\n        ) then
+\n            raise exception 'Insufficient tokens';
 \n        end if;
 \n    end if;
 \n
-\n    return NEW;
-\nexception
-\n    when others then
-\n        raise log 'Error in handle_card_generation_tokens: %', SQLERRM;
-\n        raise;
+\n    -- Begin transaction
+\n    -- 1. Deduct tokens from buyer
+\n    if p_use_purchased_tokens then
+\n        update player_profiles
+\n        set purchased_tokens = purchased_tokens - v_token_price
+\n        where user_id = p_buyer_id;
+\n    else
+\n        update player_profiles
+\n        set free_tokens = free_tokens - v_token_price
+\n        where user_id = p_buyer_id;
+\n    end if;
+\n
+\n    -- 2. Add tokens to seller (minus 1 token fee)
+\n    -- Always add to free_tokens for seller as these are considered ""earned"" tokens
+\n    update player_profiles
+\n    set free_tokens = free_tokens + (v_token_price - 1)
+\n    where user_id = v_seller_id;
+\n
+\n    -- 3. Transfer card ownership
+\n    update cards
+\n    set user_id = p_buyer_id
+\n    where id = v_card_id;
+\n
+\n    -- 4. Update listing status
+\n    update trade_listings
+\n    set status = 'sold'
+\n    where id = p_listing_id;
+\n
+\n    -- Create transaction records using new transaction types
+\n    -- For buyer: negative amount to record spending tokens
+\n    insert into token_transactions (
+\n        user_id,
+\n        amount,
+\n        transaction_type,
+\n        is_purchased
+\n    ) values
+\n    (p_buyer_id, -v_token_price, 'trade_purchase', p_use_purchased_tokens);
+\n
+\n    -- For seller: positive amount to record receiving tokens (minus fee)
+\n    insert into token_transactions (
+\n        user_id,
+\n        amount,
+\n        transaction_type,
+\n        is_purchased
+\n    ) values
+\n    (v_seller_id, v_token_price - 1, 'trade_sale', false);
 \nend;
 \n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: update_collection_stats\nCREATE OR REPLACE FUNCTION public.update_collection_stats()\nRETURNS trigger\nAS $$\n

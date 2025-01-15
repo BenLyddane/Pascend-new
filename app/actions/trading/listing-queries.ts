@@ -3,7 +3,7 @@
 import { createClient } from "@/utils/supabase/server";
 import { TradeListingData, TradingCardData } from "@/app/protected/trading/types";
 import { ListingWithCard, CardWithProperties, TradeListingStatus } from "./types";
-import { LISTING_WITH_CARD_QUERY, transformCardData } from "./utils";
+import { LISTING_WITH_CARD_QUERY, CARD_PROPERTIES_QUERY, transformCardData } from "./utils";
 
 export async function getActiveTradingListings(
   userId: string
@@ -12,7 +12,16 @@ export async function getActiveTradingListings(
 
   const { data, error } = await supabase
     .from("trade_listings")
-    .select(LISTING_WITH_CARD_QUERY)
+    .select(`
+      id,
+      token_price,
+      listed_at,
+      seller_id,
+      status,
+      card:cards!trade_listings_card_id_fkey (
+        ${CARD_PROPERTIES_QUERY}
+      )
+    `)
     .eq("status", "active")
     .neq("seller_id", userId) // Don't show user's own listings
     .order("listed_at", { ascending: false });
@@ -23,7 +32,7 @@ export async function getActiveTradingListings(
   }
 
   const listings = (data || []).map((listing: any) => {
-    const cardData = listing.cards;
+    const cardData = listing.card;
     if (!cardData) {
       console.error("Missing card data for listing:", listing.id);
       return null;
@@ -49,9 +58,17 @@ export async function getUserListings(
 
   const { data, error } = await supabase
     .from("trade_listings")
-    .select(LISTING_WITH_CARD_QUERY)
+    .select(`
+      id,
+      token_price,
+      listed_at,
+      seller_id,
+      status,
+      card:cards!trade_listings_card_id_fkey (
+        ${CARD_PROPERTIES_QUERY}
+      )
+    `)
     .eq("seller_id", userId)
-    .eq("status", "active")
     .order("listed_at", { ascending: false });
 
   if (error) {
@@ -60,7 +77,7 @@ export async function getUserListings(
   }
 
   const listings = (data || []).map((listing: any) => {
-    const cardData = listing.cards;
+    const cardData = listing.card;
     if (!cardData) {
       console.error("Missing card data for listing:", listing.id);
       return null;
