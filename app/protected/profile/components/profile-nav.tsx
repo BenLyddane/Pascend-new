@@ -1,29 +1,53 @@
-"use client";
+'use client';
 
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { UserIcon, SettingsIcon, ShieldIcon, BarChartIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-export function ProfileNav() {
+export default function ProfileNav() {
   const pathname = usePathname();
-  const currentTab = pathname.split('/').pop();
+
+  const navigation = [
+    {
+      name: "Basic Profile",
+      href: "/protected/profile/basic",
+      icon: <UserIcon size={16} />,
+    },
+    {
+      name: "Settings",
+      href: "/protected/profile/settings",
+      icon: <SettingsIcon size={16} />,
+    },
+    {
+      name: "Security",
+      href: "/protected/profile/security",
+      icon: <ShieldIcon size={16} />,
+    },
+    {
+      name: "Stats",
+      href: "/protected/profile/stats",
+      icon: <BarChartIcon size={16} />,
+    },
+  ];
 
   return (
-    <Tabs value={currentTab} className="w-full">
-      <TabsList className="grid w-full grid-cols-4">
-        <Link href="/protected/profile/basic">
-          <TabsTrigger value="basic">Profile</TabsTrigger>
+    <nav className="flex flex-col space-y-2 mb-8">
+      {navigation.map((item) => (
+        <Link
+          key={item.name}
+          href={item.href}
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+            pathname === item.href
+              ? "bg-accent text-foreground"
+              : "text-muted-foreground hover:text-foreground hover:bg-accent"
+          )}
+        >
+          {item.icon}
+          <span>{item.name}</span>
         </Link>
-        <Link href="/protected/profile/security">
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </Link>
-        <Link href="/protected/profile/stats">
-          <TabsTrigger value="stats">Statistics</TabsTrigger>
-        </Link>
-        <Link href="/protected/profile/settings">
-          <TabsTrigger value="settings">Settings</TabsTrigger>
-        </Link>
-      </TabsList>
-    </Tabs>
+      ))}
+    </nav>
   );
 }
