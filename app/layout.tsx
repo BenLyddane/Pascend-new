@@ -14,8 +14,8 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Next.js and Supabase Starter Kit",
-  description: "The fastest way to build apps with Next.js and Supabase",
+  title: "Pascend TCG",
+  description: "A revolutionary AI-powered trading card game",
 };
 
 const geistSans = Geist({
@@ -42,8 +42,6 @@ export default function RootLayout({
               <nav className="w-full flex justify-center border-b border-b-foreground/10 h-16">
                 <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
                   <div className="flex gap-5 items-center font-semibold">
-                    
-                  
                   </div>
                   {!hasEnvVars ? <EnvVarWarning /> : <HeaderAuth />}
                 </div>
@@ -56,12 +54,12 @@ export default function RootLayout({
                 <p>
                   Powered by{" "}
                   <a
-                    href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
+                    href="https://benlyddane.com"
                     target="_blank"
                     className="font-bold hover:underline"
                     rel="noreferrer"
                   >
-                    Supabase
+                    Ben Lyddane
                   </a>
                 </p>
                 <ThemeSwitcher />

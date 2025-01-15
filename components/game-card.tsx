@@ -1,18 +1,20 @@
+"use client";
+
 import Image from "next/image";
 import {
   HoverCard,
   HoverCardTrigger,
   HoverCardContent,
-} from "@/components/ui/hover-card";
+} from "./ui/hover-card";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { CardWithEffects } from "@/app/actions/fetchDecks";
-import { cn } from "@/lib/utils";
-import { TradeListing } from "@/app/actions/fetchCards";
+} from "./ui/tooltip";
+import { CardWithEffects } from "../app/actions/fetchDecks";
+import { cn } from "../lib/utils";
+import { TradeListing } from "../app/actions/fetchCards";
 import { useRouter } from "next/navigation";
 import { TagIcon } from "lucide-react";
 
