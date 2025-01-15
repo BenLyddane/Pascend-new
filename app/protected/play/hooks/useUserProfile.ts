@@ -28,7 +28,7 @@ export function useUserProfile(): UseUserProfileResult {
 
         const { data: profile, error: profileError } = await supabase
           .from("player_profiles")
-          .select("settings")
+          .select("display_name")
           .eq("user_id", user.id)
           .single();
 
@@ -36,8 +36,8 @@ export function useUserProfile(): UseUserProfileResult {
           throw profileError;
         }
 
-        if (profile?.settings?.display_name) {
-          setUserName(profile.settings.display_name);
+        if (profile?.display_name) {
+          setUserName(profile.display_name);
         } else {
           setUserName(user.email?.split("@")[0] || "Player");
         }

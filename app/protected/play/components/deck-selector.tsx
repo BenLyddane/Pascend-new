@@ -51,20 +51,8 @@ export default function DeckSelector({
 
   useEffect(() => {
     async function initAuth() {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-      }
-
-      const {
-        data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
-      });
-
-      return () => subscription.unsubscribe();
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
     }
 
     initAuth();

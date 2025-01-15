@@ -21,7 +21,6 @@ type Profile = Database["public"]["Tables"]["player_profiles"]["Row"] & {
       theme?: string;
       cardAnimation?: boolean;
     };
-    display_name?: string;
   };
 };
 
@@ -33,8 +32,8 @@ interface ProfileFormProps {
 export function ProfileForm({ user, profile }: ProfileFormProps) {
   const { setStatus } = useStatus();
   const getInitialDisplayName = (): string => {
-    if (profile.settings?.display_name) {
-      return profile.settings.display_name;
+    if (profile.display_name) {
+      return profile.display_name;
     }
     if (user.email) {
       return user.email.split("@")[0];
@@ -71,11 +70,18 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
           <Label htmlFor="email">Email</Label>
           <Input
             id="email"
+            name="email"
             type="email"
-            value={String(user.email || "")}
-            disabled
+            defaultValue={String(user.email || "")}
             className="bg-muted"
+            onChange={(e) => {
+              // Remove bg-muted when user starts editing
+              e.currentTarget.classList.remove("bg-muted");
+            }}
           />
+          <p className="text-sm text-muted-foreground mt-1">
+            Changing your email will require verification
+          </p>
         </div>
 
         <div className="space-y-2">
@@ -86,7 +92,12 @@ export function ProfileForm({ user, profile }: ProfileFormProps) {
             value={String(displayName)}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Your display name"
+            minLength={3}
+            maxLength={30}
           />
+          <p className="text-sm text-muted-foreground mt-1">
+            Display name must be between 3 and 30 characters
+          </p>
         </div>
 
         <div className="space-y-2">
