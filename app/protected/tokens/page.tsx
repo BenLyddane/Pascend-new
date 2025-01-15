@@ -14,14 +14,14 @@ import {
 export default async function TokensPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const supabase = await createClient();
 
   // Handle Stripe redirect with session ID
   let paymentSuccess = false;
   let paymentError: string | null = null;
-  const params = await Promise.resolve(searchParams);
+  const params = await searchParams;
   const sessionId = params?.session_id;
   if (sessionId && typeof sessionId === 'string') {
     try {

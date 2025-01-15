@@ -1,6 +1,8 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Card } from "@/components/ui/card";
+import { LeaderboardFilters, SortField, SortDirection } from "./components/leaderboard-filters";
 import {
   Table,
   TableBody,
@@ -10,13 +12,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Database } from "@/types/database.types";
+import { Tables } from "@/types/database.types";
 
-type PlayerProfile = Database["public"]["Tables"]["player_profiles"]["Row"] & {
-  "auth.users"?: {
-    email?: string;
-  } | null;
-};
+type PlayerProfile = Tables<"player_profiles">;
 
 interface LeaderboardClientProps {
   topPlayers: PlayerProfile[];
@@ -53,15 +51,80 @@ export default function LeaderboardClient({
   userRank,
   currentUserId,
 }: LeaderboardClientProps) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTier, setSelectedTier] = useState<string | "all">("all");
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection } | null>(null);
+
+  const filteredPlayers = useMemo(() => {
+    let filtered = [...topPlayers];
+
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        player => player.display_name?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    // Apply tier filter
+    if (selectedTier !== "all") {
+      filtered = filtered.filter(player => player.rank_tier === selectedTier);
+    }
+
+    // Apply sorting
+    if (sort) {
+      filtered.sort((a, b) => {
+        let aValue: number = 0;
+        let bValue: number = 0;
+
+        switch (sort.field) {
+          case "rank_points":
+            aValue = a.rank_points || 0;
+            bValue = b.rank_points || 0;
+            break;
+          case "wins":
+            aValue = a.wins || 0;
+            bValue = b.wins || 0;
+            break;
+          case "losses":
+            aValue = a.losses || 0;
+            bValue = b.losses || 0;
+            break;
+          case "current_streak":
+            aValue = a.current_streak || 0;
+            bValue = b.current_streak || 0;
+            break;
+          case "win_rate":
+            aValue = a.wins && a.total_matches ? (a.wins / a.total_matches) * 100 : 0;
+            bValue = b.wins && b.total_matches ? (b.wins / b.total_matches) * 100 : 0;
+            break;
+        }
+
+        return sort.direction === "asc" ? aValue - bValue : bValue - aValue;
+      });
+    }
+
+    return filtered;
+  }, [topPlayers, searchTerm, selectedTier, sort]);
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Leaderboard</h1>
-        {userRank && (
-          <div className="text-lg">
-            Your Rank: <span className="font-bold">#{userRank}</span>
-          </div>
-        )}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Leaderboard</h1>
+          {userRank !== null && (
+            <div className="text-lg">
+              Your Rank: <span className="font-bold">#{userRank + 1}</span>
+            </div>
+          )}
+        </div>
+
+        <LeaderboardFilters
+          onSearchChange={setSearchTerm}
+          onTierFilter={setSelectedTier}
+          onSort={(field, direction) => setSort({ field, direction })}
+          currentSort={sort}
+        />
       </div>
 
       <Card>
@@ -79,7 +142,7 @@ export default function LeaderboardClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {topPlayers.map((player, index) => (
+            {filteredPlayers.map((player, index) => (
               <TableRow
                 key={player.user_id}
                 className={
@@ -92,17 +155,17 @@ export default function LeaderboardClient({
                     <Avatar className="h-6 w-6">
                       <AvatarImage src={player.avatar_url || undefined} />
                       <AvatarFallback>
-                        {player["auth.users"]?.email
+                        {player.display_name
                           ?.substring(0, 2)
                           .toUpperCase() || "??"}
                       </AvatarFallback>
                     </Avatar>
                     <span>
-                      {player["auth.users"]?.email || "Unknown Player"}
+                      {player.display_name || "Unknown Player"}
                     </span>
                   </div>
                 </TableCell>
-                <TableCell>{player.rank_points}</TableCell>
+                <TableCell>{player.rank_points || 0}</TableCell>
                 <TableCell>
                   <span className={getRankTierColor(player.rank_tier)}>
                     {player.rank_tier

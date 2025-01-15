@@ -5,51 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import CollectionClient from "./collection-client";
-
-type CardData = {
-  id: string;
-  name: string;
-  description: string;
-  rarity: string;
-  power: number;
-  health: number;
-  modifier: number;
-  image_url: string;
-  special_effects: Array<{
-    id: string;
-    name: string;
-    description: string;
-    value?: number;
-  }>;
-};
-
-// Server-side function to fetch user cards
-async function fetchUserCards(userId: string): Promise<CardData[]> {
-  const supabase = await createClient();
-  const { data: userCards, error } = await supabase
-    .from("cards")
-    .select(
-      `
-      id,
-      name,
-      description,
-      rarity,
-      power,
-      health,
-      modifier,
-      image_url,
-      special_effects
-    `
-    )
-    .eq("user_id", userId);
-
-  if (error) {
-    console.error("Error fetching cards:", error);
-    return [];
-  }
-
-  return userCards || [];
-}
+import { fetchCards, mergeSpecialEffects } from "@/app/actions/fetchCards";
 
 export default async function CollectionPage() {
   const supabase = await createClient();
@@ -62,7 +18,8 @@ export default async function CollectionPage() {
     return null;
   }
 
-  const userCards = await fetchUserCards(user.id);
+  const cards = await fetchCards(user.id);
+  const userCards = cards.map(mergeSpecialEffects);
 
   if (userCards.length === 0) {
     return (

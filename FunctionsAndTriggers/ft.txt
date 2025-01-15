@@ -245,7 +245,8 @@ complete_database_export
 \n    longest_streak,
 \n    settings,
 \n    free_tokens,
-\n    purchased_tokens
+\n    purchased_tokens,
+\n    display_name
 \n  ) VALUES (
 \n    NEW.id,
 \n    1000,
@@ -260,8 +261,19 @@ complete_database_export
 \n    0,
 \n    '{}',
 \n    10,
-\n    0
+\n    0,
+\n    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email) -- Use full_name if available, otherwise fall back to email
 \n  );
+\n  
+\n  RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: sync_display_name\nCREATE OR REPLACE FUNCTION public.sync_display_name()\nRETURNS trigger\nAS $$\n
+\nBEGIN
+\n  -- Update player_profiles display_name when auth.users metadata changes
+\n  UPDATE public.player_profiles
+\n  SET display_name = COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email)
+\n  WHERE user_id = NEW.id;
 \n  
 \n  RETURN NEW;
 \nEND;
@@ -880,6 +892,7 @@ complete_database_export
 \n-- Grants for function: process_matchmaking\nGRANT EXECUTE ON FUNCTION public.process_matchmaking() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: purchase_trade_listing\nGRANT EXECUTE ON FUNCTION public.purchase_trade_listing(p_listing_id uuid, p_buyer_id uuid, p_use_purchased_tokens boolean DEFAULT false) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: rollback_transaction\nGRANT EXECUTE ON FUNCTION public.rollback_transaction() TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: sync_display_name\nGRANT EXECUTE ON FUNCTION public.sync_display_name() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_card_special_effects\nGRANT EXECUTE ON FUNCTION public.update_card_special_effects() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_collection_stats\nGRANT EXECUTE ON FUNCTION public.update_collection_stats() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_player_ranks\nGRANT EXECUTE ON FUNCTION public.update_player_ranks() TO PUBLIC, anon, authenticated, postgres, service_role;

@@ -3,13 +3,7 @@ import { redirect } from "next/navigation";
 import LeaderboardClient from "./leaderboard-client";
 import { Tables } from "@/types/database.types";
 
-type PlayerProfile = Tables<"player_profiles"> & {
-  auth: {
-    users: {
-      email: string;
-    };
-  };
-};
+type PlayerProfile = Tables<"player_profiles">;
 
 export default async function LeaderboardPage() {
   const supabase = await createClient();
@@ -24,32 +18,15 @@ export default async function LeaderboardPage() {
   // Fetch top players ordered by rank points
   const { data: topPlayers } = await supabase
     .from("player_profiles")
-    .select(
-      `
-      user_id,
-      rank_points,
-      rank_tier,
-      seasonal_rank_points,
-      season_highest_rank,
-      wins,
-      losses,
-      draws,
-      current_streak,
-      longest_streak,
-      total_matches,
-      avatar_url,
-      auth.users!player_profiles_user_id_fkey (
-        email
-      )
-    `
-    )
+    .select("*")
     .order("rank_points", { ascending: false })
     .limit(100);
 
-  // Get user's own rank
-  const { data: userRank } = await supabase.rpc("get_player_rank", {
-    player_id: user.id,
-  });
+  // Get user's own rank by counting players with higher rank points
+  const { count: userRank } = await supabase
+    .from("player_profiles")
+    .select("*", { count: "exact", head: true })
+    .gt("rank_points", (topPlayers || []).find((p) => p.user_id === user.id)?.rank_points || 0);
 
   return (
     <div className="container mx-auto p-4">

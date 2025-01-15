@@ -1,29 +1,60 @@
-// components/dashboard/dash-leaderboard.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrophyIcon, MedalIcon, User2Icon } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { createClient } from "@/utils/supabase/server";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Database } from "@/types/database.types";
 
-interface LeaderboardPlayer {
-  id: string;
-  username: string;
-  points: number;
-  win_rate: number;
-  rank: number;
+type PlayerProfile = Database["public"]["Tables"]["player_profiles"]["Row"];
+
+function getRankTierColor(tier: string | null) {
+  switch (tier) {
+    case "bronze":
+      return "text-orange-600";
+    case "silver":
+      return "text-gray-400";
+    case "gold":
+      return "text-yellow-400";
+    case "platinum":
+      return "text-cyan-400";
+    case "diamond":
+      return "text-blue-500";
+    case "master":
+      return "text-purple-500";
+    default:
+      return "text-gray-500";
+  }
 }
 
-async function getTopPlayers(): Promise<LeaderboardPlayer[]> {
+function getWinRate(wins: number | null, totalMatches: number | null): string {
+  if (!wins || !totalMatches || totalMatches === 0) return "0%";
+  return `${Math.round((wins / totalMatches) * 100)}%`;
+}
+
+async function getTopPlayers(): Promise<PlayerProfile[]> {
   const supabase = await createClient();
 
-  // Get top players from player_profiles
   const { data: profiles, error } = await supabase
     .from("player_profiles")
     .select(`
       user_id,
+      display_name,
+      avatar_url,
       rank_points,
+      rank_tier,
       wins,
+      losses,
       total_matches,
+      current_streak,
+      longest_streak,
+      created_at,
+      draws,
+      free_tokens,
+      last_match_at,
+      purchased_tokens,
+      seasonal_rank_points,
+      season_highest_rank,
       settings
     `)
     .order("rank_points", { ascending: false })
@@ -34,14 +65,7 @@ async function getTopPlayers(): Promise<LeaderboardPlayer[]> {
     return [];
   }
 
-  return profiles.map((profile, index) => ({
-    id: profile.user_id,
-    username: profile.settings?.displayName || "Unknown Player",
-    points: profile.rank_points || 0,
-    win_rate: profile.total_matches ? 
-      Math.round((profile.wins || 0) / profile.total_matches * 100) : 0,
-    rank: index + 1
-  }));
+  return profiles;
 }
 
 function getRankIcon(rank: number) {
@@ -74,24 +98,47 @@ export async function DashLeaderboard() {
       <CardContent>
         <div className="space-y-4">
           {players.length > 0
-            ? players.map((player) => (
-                <div key={player.id} className="flex items-center">
+            ? players.map((player, index) => (
+                <div key={player.user_id} className="flex items-center">
                   <div className="flex items-center gap-2 flex-1">
                     <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center">
-                      {getRankIcon(player.rank)}
+                      {getRankIcon(index + 1)}
                     </div>
                     <div className="flex flex-col">
-                      <span className="text-sm font-medium">
-                        {player.username}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {player.points.toLocaleString()} pts
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6">
+                          <AvatarImage src={player.avatar_url || undefined} />
+                          <AvatarFallback>
+                            {player.display_name
+                              ?.substring(0, 2)
+                              .toUpperCase() || "??"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">
+                          {player.display_name || "Unknown Player"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">
+                          {player.rank_points?.toLocaleString() || 0} pts
+                        </span>
+                        <span className={getRankTierColor(player.rank_tier)}>
+                          {player.rank_tier
+                            ? player.rank_tier.charAt(0).toUpperCase() +
+                              player.rank_tier.slice(1)
+                            : "Unranked"}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <span className="text-sm font-medium">
-                    Win Rate: {player.win_rate}%
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <span className="text-sm font-medium">
+                      Win Rate: {getWinRate(player.wins, player.total_matches)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      Streak: {player.current_streak || 0}
+                    </span>
+                  </div>
                 </div>
               ))
             : // Skeleton loading state
