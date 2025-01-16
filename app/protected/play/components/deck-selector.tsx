@@ -1,7 +1,13 @@
- "use client";
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Tooltip,
   TooltipContent,
@@ -9,25 +15,37 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { CardRarity } from "@/types/game.types";
-import { GameCard, CardEffect, convertToGameCard } from "@/app/protected/play/game-engine/types";
+import {
+  GameCard,
+  CardEffect,
+  convertToGameCard,
+} from "@/app/protected/play/game-engine/types";
 import { GameCardMinimal } from "@/components/game-card-minimal";
-import { fetchDecks, type DeckWithCards, type CardWithEffects } from "@/app/actions/fetchDecks";
+import { GameCard as GameCardFull } from "@/components/game-card";
+import {
+  fetchDecks,
+  type DeckWithCards,
+  type CardWithEffects,
+} from "@/app/actions/fetchDecks";
 import { mergeSpecialEffects } from "@/app/actions/fetchCards";
 import { Database } from "@/types/database.types";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 // Helper function to convert between deck types
-function convertDeck(deck: DeckWithCards): Database["public"]["Tables"]["player_decks"]["Row"] & { cards: GameCard[] } {
+function convertDeck(
+  deck: DeckWithCards
+): Database["public"]["Tables"]["player_decks"]["Row"] & { cards: GameCard[] } {
   return {
     ...deck,
-    card_list: deck.cards.map(card => ({ id: card.id })),
-    cards: deck.cards.map(card => ({
+    card_list: deck.cards.map((card) => ({ id: card.id })),
+    cards: deck.cards.map((card) => ({
       ...card,
-      gameplay_effects: card.special_effects.map(effect => ({
+      gameplay_effects: card.special_effects.map((effect) => ({
         effect_type: effect.effect_type,
         effect_icon: effect.effect_icon,
-        value: effect.value
-      }))
-    })) as GameCard[]
+        value: effect.value,
+      })),
+    })) as GameCard[],
   };
 }
 import { createClient } from "@/utils/supabase/client";
@@ -37,21 +55,36 @@ export default function DeckSelector({
   selectedDeck,
   label = "Select a Deck",
 }: {
-  onDeckSelect: (deck: DeckWithCards | (Database["public"]["Tables"]["player_decks"]["Row"] & { cards: GameCard[] })) => void;
-  selectedDeck?: DeckWithCards | (Database["public"]["Tables"]["player_decks"]["Row"] & { cards: GameCard[] }) | null;
+  onDeckSelect: (
+    deck:
+      | DeckWithCards
+      | (Database["public"]["Tables"]["player_decks"]["Row"] & {
+          cards: GameCard[];
+        })
+  ) => void;
+  selectedDeck?:
+    | DeckWithCards
+    | (Database["public"]["Tables"]["player_decks"]["Row"] & {
+        cards: GameCard[];
+      })
+    | null;
   label?: string;
 }) {
   const [decks, setDecks] = useState<DeckWithCards[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedDeckForPreview, setSelectedDeckForPreview] =
+    useState<DeckWithCards | null>(null);
   const decksPerPage = 6;
   const supabase = createClient();
   const [user, setUser] = useState<{ id: string } | null>(null);
 
   useEffect(() => {
     async function initAuth() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setUser(user);
     }
 
@@ -76,18 +109,20 @@ export default function DeckSelector({
 
   // Filter decks based on search query
   const filteredDecks = useMemo(() => {
-    return decks.filter(deck => 
-      deck.name?.toLowerCase().includes(searchQuery.toLowerCase() || "") ?? false
+    return decks.filter(
+      (deck) =>
+        deck.name?.toLowerCase().includes(searchQuery.toLowerCase() || "") ??
+        false
     );
   }, [decks, searchQuery]);
 
   const isDeckEligible = (deck: DeckWithCards) => {
     // Check if deck has exactly 5 cards
     if (deck.cards.length !== 5) return false;
-    
+
     // Check if any cards are listed for trade
-    return !deck.cards.some(card => 
-      card.trade_listings?.some(listing => listing.status === "active")
+    return !deck.cards.some((card) =>
+      card.trade_listings?.some((listing) => listing.status === "active")
     );
   };
 
@@ -102,7 +137,10 @@ export default function DeckSelector({
   // Calculate pagination
   const totalPages = Math.ceil(filteredDecks.length / decksPerPage);
   const startIndex = (currentPage - 1) * decksPerPage;
-  const paginatedDecks = filteredDecks.slice(startIndex, startIndex + decksPerPage);
+  const paginatedDecks = filteredDecks.slice(
+    startIndex,
+    startIndex + decksPerPage
+  );
 
   return (
     <div className="space-y-4">
@@ -122,67 +160,100 @@ export default function DeckSelector({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {paginatedDecks.map((deck) => (
           <TooltipProvider key={deck.id}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <button
-                  onClick={() => {
-                    if (isDeckEligible(deck)) {
-                      onDeckSelect('gameplay_effects' in deck.cards[0] ? deck : convertDeck(deck));
-                    }
-                  }}
+                <div
                   className={`p-4 rounded-lg border-2 transition-all ${
                     selectedDeck?.id === deck.id
                       ? "border-primary bg-primary/10"
                       : !isDeckEligible(deck)
-                      ? "border-muted opacity-50 cursor-not-allowed"
-                      : "border-muted hover:border-primary/50"
+                        ? "border-muted opacity-50"
+                        : "border-muted"
                   }`}
                 >
-            <div className="flex justify-between items-start mb-2">
-              <div>
-                <h4 className="font-medium">{deck.name}</h4>
-                {deck.description && (
-                  <p className="text-sm text-muted-foreground">
-                    {deck.description}
-                  </p>
-                )}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {deck.wins || 0}W - {deck.losses || 0}L
-              </div>
-            </div>
+                  <div className="w-full">
+                    <div 
+                      className="flex justify-between items-start mb-2 cursor-pointer hover:opacity-80"
+                      onClick={() => setSelectedDeckForPreview(deck)}
+                    >
+                      <div>
+                        <h4 className="font-medium">{deck.name}</h4>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {deck.wins || 0}W - {deck.losses || 0}L
+                      </div>
+                    </div>
 
-            <div className="flex flex-col items-center gap-2">
-              {deck.cards[0] && (
-                <GameCardMinimal 
-                  card={deck.cards[0] as CardWithEffects} 
-                />
-              )}
-            </div>
-                </button>
+                    <div className="flex flex-col items-center gap-2">
+                      {deck.cards[0] && (
+                        <div className="w-full">
+                          <GameCardMinimal
+                            card={deck.cards[0] as CardWithEffects}
+                            className="w-full"
+                            disableModal
+                            onClick={() => setSelectedDeckForPreview(deck)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-2">
+                    {isDeckEligible(deck) ? (
+                      <button
+                        onClick={() =>
+                          onDeckSelect(
+                            "gameplay_effects" in deck.cards[0]
+                              ? deck
+                              : convertDeck(deck)
+                          )
+                        }
+                        className="w-full px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                      >
+                        Submit Deck
+                      </button>
+                    ) : (
+                      <div className="w-full px-4 py-2 rounded bg-destructive text-destructive-foreground text-center text-sm">
+                        {deck.cards.length !== 5
+                          ? "Deck requires exactly 5 cards"
+                          : "Cards listed for trade"}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </TooltipTrigger>
-              {!isDeckEligible(deck) && (
-                <TooltipContent side="top">
-                  <p>
-                    {deck.cards.length !== 5 
-                      ? "Decks must have exactly 5 cards to be used in games" 
-                      : "This deck contains cards that are listed for trade and cannot be used"}
-                  </p>
-                </TooltipContent>
-              )}
             </Tooltip>
           </TooltipProvider>
         ))}
       </div>
 
+      <Dialog
+        open={!!selectedDeckForPreview}
+        onOpenChange={() => setSelectedDeckForPreview(null)}
+      >
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedDeckForPreview?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pb-4">
+            {selectedDeckForPreview?.cards.map((card, index) => (
+              <GameCardFull
+                key={card.id}
+                card={card as CardWithEffects}
+              />
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex justify-center gap-2 mt-4">
           <button
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
             className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 disabled:opacity-50"
           >
@@ -192,7 +263,9 @@ export default function DeckSelector({
             Page {currentPage} of {totalPages}
           </span>
           <button
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+            onClick={() =>
+              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
+            }
             disabled={currentPage === totalPages}
             className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 disabled:opacity-50"
           >

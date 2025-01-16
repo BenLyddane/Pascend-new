@@ -1,6 +1,6 @@
 import { CardState, BattleLogEntry, GameState, GameCard } from "./types";
 
-export class BattleLogger {
+export class BattleDebugger {
   constructor(private gameState: GameState) {}
 
   private createPlaceholderCard(): GameCard {

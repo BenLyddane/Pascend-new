@@ -117,44 +117,30 @@ export async function updateSettings(userId: string, formData: FormData) {
     return { error: "Unauthorized access" };
   }
 
-  // Get current profile settings to preserve any other settings
-  const { data: currentProfile, error: profileFetchError } = await supabase
-    .from("player_profiles")
-    .select("settings")
-    .eq("user_id", userId)
-    .single();
-
-  if (profileFetchError) {
-    return { error: "Failed to fetch current settings" };
-  }
-
   // Get form data
   const email_notifications = formData.get("email_notifications") === "on";
   const ingame_notifications = formData.get("ingame_notifications") === "on";
   const card_animation = formData.get("card_animation") === "on";
   const theme = formData.get("theme")?.toString() || "system";
 
-  // Merge new settings with existing ones
-  const settings = {
-    ...currentProfile?.settings,
-    notifications: {
-      email: email_notifications,
-      inGame: ingame_notifications,
-    },
-    preferences: {
-      theme,
-      cardAnimation: card_animation,
-    },
-  };
+  // Validate theme value
+  if (!["light", "dark", "system"].includes(theme)) {
+    return { error: "Invalid theme value" };
+  }
 
-  const { error: profileError } = await supabase
-    .from("player_profiles")
+  // Update settings
+  const { error: settingsError } = await supabase
+    .from("player_settings")
     .update({
-      settings,
+      email_notifications,
+      ingame_notifications,
+      card_animation,
+      theme,
     })
     .eq("user_id", userId);
 
-  if (profileError) {
+  if (settingsError) {
+    console.error('Settings update error:', settingsError);
     return { error: "Settings update failed" };
   }
 

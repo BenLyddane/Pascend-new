@@ -12,12 +12,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Tables } from "@/types/database.types";
+import { Database } from "@/types/database.types";
 
-type PlayerProfile = Tables<"player_profiles">;
+type LeaderboardPlayer = Database["public"]["Functions"]["get_leaderboard"]["Returns"][0];
 
 interface LeaderboardClientProps {
-  topPlayers: PlayerProfile[];
+  topPlayers: LeaderboardPlayer[];
   userRank: number | null;
   currentUserId: string;
 }
@@ -175,7 +175,7 @@ export default function LeaderboardClient({
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
-                  {getWinRate(player.wins, player.total_matches)}
+                  {player.win_rate.toFixed(1)}%
                 </TableCell>
                 <TableCell className="text-right">{player.wins || 0}</TableCell>
                 <TableCell className="text-right">
@@ -184,9 +184,6 @@ export default function LeaderboardClient({
                 <TableCell className="text-right">
                   <div className="flex flex-col items-end text-sm">
                     <span>Current: {player.current_streak || 0}</span>
-                    <span className="text-muted-foreground">
-                      Best: {player.longest_streak || 0}
-                    </span>
                   </div>
                 </TableCell>
               </TableRow>

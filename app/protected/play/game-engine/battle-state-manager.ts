@@ -1,13 +1,13 @@
 import { GameState, CardState } from "./types";
-import { BattleLogger } from "./battle-logger";
+import { BattleDebugger } from "./battle-debugger";
 
 export class BattleStateManager {
   private readonly STATE_HISTORY_SIZE = 20;
   private stateHistory: string[] = [];
-  private battleLogger: BattleLogger;
+  private battleLogger: BattleDebugger;
 
   constructor(private gameState: GameState) {
-    this.battleLogger = new BattleLogger(gameState);
+    this.battleLogger = new BattleDebugger(gameState);
   }
 
   checkForInfiniteLoop(attacker: CardState, defender: CardState): boolean {

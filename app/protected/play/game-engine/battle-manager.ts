@@ -4,13 +4,13 @@ import { DamageCalculator } from "./damage-calculator";
 import { BattleStateManager } from "./battle-state-manager";
 import { CombatProcessor } from "./combat-processor";
 import { EffectPhaseProcessor } from "./effect-phase-processor";
-import { BattleLogger } from "./battle-logger";
+import { BattleDebugger } from "./battle-debugger";
 
 export class BattleManager {
   private stateManager: BattleStateManager;
   private combatProcessor: CombatProcessor;
   private effectPhaseProcessor: EffectPhaseProcessor;
-  private battleLogger: BattleLogger;
+  private battleLogger: BattleDebugger;
 
   getCurrentBattlers(): { 
     attacker: CardState | null; 
@@ -30,7 +30,7 @@ export class BattleManager {
       damageCalculator
     );
     this.effectPhaseProcessor = new EffectPhaseProcessor(effectsProcessor);
-    this.battleLogger = new BattleLogger(gameState);
+    this.battleLogger = new BattleDebugger(gameState);
   }
 
   processTurn(): BattleLogEntry | null {

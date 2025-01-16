@@ -22,6 +22,9 @@ interface SpecialEffect {
 interface GameCardMinimalProps {
   card: CardWithEffects;
   onRemove?: (card: CardWithEffects) => void;
+  className?: string;
+  disableModal?: boolean;
+  onClick?: () => void;
 }
 
 function isSpecialEffect(obj: unknown): obj is SpecialEffect {
@@ -36,7 +39,7 @@ function isSpecialEffect(obj: unknown): obj is SpecialEffect {
   );
 }
 
-export function GameCardMinimal({ card, onRemove }: GameCardMinimalProps) {
+export function GameCardMinimal({ card, onRemove, className, disableModal, onClick }: GameCardMinimalProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const effects: SpecialEffect[] = (() => {
@@ -59,22 +62,14 @@ export function GameCardMinimal({ card, onRemove }: GameCardMinimalProps) {
   })();
 
   return (
-    <div>
+    <div className={className}>
       {/* Card Image and Name */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <div
-            className="cursor-pointer bg-white dark:bg-neutral-900 rounded-md border shadow-md p-1 hover:shadow-lg transition-all relative group w-[160px]"
-            onClick={(e) => {
-              if (onRemove) {
-                e.stopPropagation();
-                onRemove(card);
-              } else {
-                setIsDialogOpen(true);
-              }
-            }}
-          >
-            <div className="relative h-[50px] w-full mb-1 rounded-md overflow-hidden border">
+      {disableModal ? (
+        <div
+          className="cursor-pointer bg-white dark:bg-neutral-900 rounded-md border shadow-md p-1 hover:shadow-lg transition-all relative group w-full max-w-[160px] mx-auto"
+          onClick={onClick}
+        >
+            <div className="relative aspect-[16/9] w-full mb-1 rounded-md overflow-hidden border">
               {/* Hover overlay with card details */}
               <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center p-1 z-10">
                 <div className="flex items-center gap-2">
@@ -99,20 +94,61 @@ export function GameCardMinimal({ card, onRemove }: GameCardMinimalProps) {
                 {card.name}
               </h2>
             </div>
-          </div>
-        </DialogTrigger>
+        </div>
+      ) : (
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <div
+              className="cursor-pointer bg-white dark:bg-neutral-900 rounded-md border shadow-md p-1 hover:shadow-lg transition-all relative group w-full max-w-[160px] mx-auto"
+              onClick={(e) => {
+                if (onRemove) {
+                  e.stopPropagation();
+                  onRemove(card);
+                } else {
+                  setIsDialogOpen(true);
+                }
+              }}
+            >
+              <div className="relative aspect-[16/9] w-full mb-1 rounded-md overflow-hidden border">
+                {/* Hover overlay with card details */}
+                <div className="absolute inset-0 bg-black/80 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center p-1 z-10">
+                  <div className="flex items-center gap-2">
+                    <span className="text-white text-xs">P: {card.power}</span>
+                    <span className="text-white text-xs">H: {card.health}</span>
+                  </div>
+                </div>
+                {card.image_url ? (
+                  <img
+                    src={card.image_url}
+                    alt={card.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full flex items-center justify-center bg-gray-200 dark:bg-neutral-800 text-gray-500 text-sm">
+                    No Image
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-xs font-medium">
+                  {card.name}
+                </h2>
+              </div>
+            </div>
+          </DialogTrigger>
 
-        {/* Modal Content: Full GameCard */}
-        <DialogContent className="max-w-2xl">
-          <GameCard card={card} />
-          <Button
-            onClick={() => setIsDialogOpen(false)}
-            className="mt-4 w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white"
-          >
-            Close
-          </Button>
-        </DialogContent>
-      </Dialog>
+          {/* Modal Content: Full GameCard */}
+          <DialogContent className="max-w-2xl">
+            <GameCard card={card} />
+            <Button
+              onClick={() => setIsDialogOpen(false)}
+              className="mt-4 w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white"
+            >
+              Close
+            </Button>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

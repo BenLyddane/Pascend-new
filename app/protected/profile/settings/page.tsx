@@ -20,12 +20,16 @@ export default async function SettingsPage() {
     return redirect("/sign-in");
   }
 
-  // Fetch profile data
-  const { data: profile } = await supabase
-    .from("player_profiles")
+  // Fetch settings data
+  const { data: settings, error } = await supabase
+    .from("player_settings")
     .select("*")
     .eq("user_id", user.id)
     .single();
+
+  if (error) {
+    console.error('Failed to fetch settings:', error);
+  }
 
   return (
     <Card>
@@ -36,7 +40,7 @@ export default async function SettingsPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <SettingsForm user={user} settings={profile?.settings} />
+        <SettingsForm user={user} settings={settings} />
       </CardContent>
     </Card>
   );

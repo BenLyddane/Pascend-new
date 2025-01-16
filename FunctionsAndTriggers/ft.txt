@@ -10,6 +10,8 @@ complete_database_export
 #NAME?
 #NAME?
 #NAME?
+#NAME?
+#NAME?
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: card_effect_values_update on card_effect_values\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION update_card_special_effects()()\nRETURNS trigger AS $$\n
 \nBEGIN
 \n    -- Update the special_effects column in cards
@@ -110,6 +112,44 @@ complete_database_export
 \n    return new;
 \nend;
 \n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS update_matchmaking_queue_timestamp ON matchmaking_queue;\nCREATE TRIGGER update_matchmaking_queue_timestamp\nBEFORE UPDATE\nON matchmaking_queue\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION update_timestamp()();\n"
+"\n-- TRIGGER DEFINITIONS:\n-- Trigger: update_player_settings_updated_at on player_settings\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION update_updated_at_column()()\nRETURNS trigger AS $$\n
+\nBEGIN
+\n    NEW.updated_at = timezone('utc'::text, now());
+\n    RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS update_player_settings_updated_at ON player_settings;\nCREATE TRIGGER update_player_settings_updated_at\nBEFORE UPDATE\nON player_settings\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION update_updated_at_column()();\n"
+"\n-- TRIGGER DEFINITIONS:\n-- Trigger: update_player_stats_trigger on match_history\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION update_player_stats()()\nRETURNS trigger AS $$\n
+\nBEGIN
+\n    -- Update basic stats
+\n    UPDATE player_stats
+\n    SET 
+\n        total_matches = total_matches + 1,
+\n        wins = CASE WHEN NEW.result = 'win' THEN wins + 1 ELSE wins END,
+\n        losses = CASE WHEN NEW.result = 'loss' THEN losses + 1 ELSE losses END,
+\n        draws = CASE WHEN NEW.result = 'draw' THEN draws + 1 ELSE draws END,
+\n        current_streak = CASE 
+\n            WHEN NEW.result = 'win' THEN current_streak + 1
+\n            WHEN NEW.result = 'loss' THEN 0
+\n            ELSE current_streak
+\n        END,
+\n        total_damage_dealt = total_damage_dealt + NEW.damage_dealt,
+\n        total_damage_received = total_damage_received + NEW.damage_received,
+\n        total_cards_defeated = total_cards_defeated + NEW.cards_defeated,
+\n        total_turns_played = total_turns_played + NEW.turns_played,
+\n        total_special_abilities_used = total_special_abilities_used + NEW.special_abilities_used,
+\n        last_match_at = NEW.ended_at,
+\n        updated_at = NOW()
+\n    WHERE user_id = NEW.user_id;
+\n
+\n    -- Update longest streak if needed
+\n    UPDATE player_stats
+\n    SET longest_streak = current_streak
+\n    WHERE user_id = NEW.user_id
+\n    AND current_streak > longest_streak;
+\n
+\n    RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql;\n\nDROP TRIGGER IF EXISTS update_player_stats_trigger ON match_history;\nCREATE TRIGGER update_player_stats_trigger\nAFTER INSERT\nON match_history\nFOR EACH ROW\nEXECUTE FUNCTION EXECUTE FUNCTION update_player_stats()();\n"
 "\n-- TRIGGER DEFINITIONS:\n-- Trigger: update_token_balance on token_transactions\nCREATE OR REPLACE FUNCTION EXECUTE FUNCTION check_token_balance()()\nRETURNS trigger AS $$\n
 \nbegin
 \n    -- Add debug logging
@@ -268,16 +308,6 @@ complete_database_export
 \n  RETURN NEW;
 \nEND;
 \n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
-"\n-- Function: sync_display_name\nCREATE OR REPLACE FUNCTION public.sync_display_name()\nRETURNS trigger\nAS $$\n
-\nBEGIN
-\n  -- Update player_profiles display_name when auth.users metadata changes
-\n  UPDATE public.player_profiles
-\n  SET display_name = COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email)
-\n  WHERE user_id = NEW.id;
-\n  
-\n  RETURN NEW;
-\nEND;
-\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: get_valid_properties_for_rarity\nCREATE OR REPLACE FUNCTION public.get_valid_properties_for_rarity(card_rarity text)\nRETURNS TABLE(property_id uuid)\nAS $$\n
 \nBEGIN
 \n    RETURN QUERY
@@ -299,6 +329,161 @@ complete_database_export
 \n    RETURN total_modifier;
 \nEND;
 \n\n$$ LANGUAGE plpgsql;\n"
+"\n-- Function: sync_display_name\nCREATE OR REPLACE FUNCTION public.sync_display_name()\nRETURNS trigger\nAS $$\n
+\nBEGIN
+\n  -- Only update if the raw_user_meta_data has changed
+\n  IF OLD.raw_user_meta_data->>'full_name' IS DISTINCT FROM NEW.raw_user_meta_data->>'full_name' THEN
+\n    UPDATE public.player_profiles
+\n    SET display_name = COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email)
+\n    WHERE user_id = NEW.id;
+\n  END IF;
+\n  
+\n  RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: update_updated_at_column\nCREATE OR REPLACE FUNCTION public.update_updated_at_column()\nRETURNS trigger\nAS $$\n
+\nBEGIN
+\n    NEW.updated_at = timezone('utc'::text, now());
+\n    RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql;\n"
+"\n-- Function: ensure_player_settings\nCREATE OR REPLACE FUNCTION public.ensure_player_settings()\nRETURNS trigger\nAS $$\n
+\nBEGIN
+\n    INSERT INTO player_settings (user_id)
+\n    VALUES (NEW.id)
+\n    ON CONFLICT (user_id) DO NOTHING;
+\n    RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql;\n"
+"\n-- Function: migrate_player_stats\nCREATE OR REPLACE FUNCTION public.migrate_player_stats()\nRETURNS void\nAS $$\n
+\nBEGIN
+\n    -- Insert existing stats from player_profiles
+\n    INSERT INTO player_stats (
+\n        user_id,
+\n        total_matches,
+\n        wins,
+\n        losses,
+\n        draws,
+\n        current_streak,
+\n        longest_streak,
+\n        rank_points,
+\n        rank_tier,
+\n        seasonal_rank_points,
+\n        season_highest_rank,
+\n        last_match_at
+\n    )
+\n    SELECT 
+\n        user_id,
+\n        total_matches,
+\n        wins,
+\n        losses,
+\n        draws,
+\n        current_streak,
+\n        longest_streak,
+\n        rank_points,
+\n        rank_tier,
+\n        seasonal_rank_points,
+\n        season_highest_rank,
+\n        last_match_at
+\n    FROM player_profiles
+\n    ON CONFLICT (user_id) DO UPDATE SET
+\n        total_matches = EXCLUDED.total_matches,
+\n        wins = EXCLUDED.wins,
+\n        losses = EXCLUDED.losses,
+\n        draws = EXCLUDED.draws,
+\n        current_streak = EXCLUDED.current_streak,
+\n        longest_streak = EXCLUDED.longest_streak,
+\n        rank_points = EXCLUDED.rank_points,
+\n        rank_tier = EXCLUDED.rank_tier,
+\n        seasonal_rank_points = EXCLUDED.seasonal_rank_points,
+\n        season_highest_rank = EXCLUDED.season_highest_rank,
+\n        last_match_at = EXCLUDED.last_match_at;
+\n
+\n    -- Aggregate match history stats
+\n    WITH match_stats AS (
+\n        SELECT 
+\n            user_id,
+\n            SUM(damage_dealt) as total_damage,
+\n            SUM(damage_received) as total_damage_received,
+\n            SUM(cards_defeated) as total_cards,
+\n            SUM(turns_played) as total_turns,
+\n            SUM(special_abilities_used) as total_abilities,
+\n            AVG(EXTRACT(EPOCH FROM (ended_at - started_at))) as avg_duration
+\n        FROM match_history
+\n        GROUP BY user_id
+\n    )
+\n    UPDATE player_stats ps
+\n    SET 
+\n        total_damage_dealt = COALESCE(ms.total_damage, 0),
+\n        total_damage_received = COALESCE(ms.total_damage_received, 0),
+\n        total_cards_defeated = COALESCE(ms.total_cards, 0),
+\n        total_turns_played = COALESCE(ms.total_turns, 0),
+\n        total_special_abilities_used = COALESCE(ms.total_abilities, 0),
+\n        average_game_duration = CASE 
+\n            WHEN ms.avg_duration IS NOT NULL THEN make_interval(secs => ms.avg_duration)
+\n            ELSE NULL
+\n        END
+\n    FROM match_stats ms
+\n    WHERE ps.user_id = ms.user_id;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: update_player_stats\nCREATE OR REPLACE FUNCTION public.update_player_stats()\nRETURNS trigger\nAS $$\n
+\nBEGIN
+\n    -- Update basic stats
+\n    UPDATE player_stats
+\n    SET 
+\n        total_matches = total_matches + 1,
+\n        wins = CASE WHEN NEW.result = 'win' THEN wins + 1 ELSE wins END,
+\n        losses = CASE WHEN NEW.result = 'loss' THEN losses + 1 ELSE losses END,
+\n        draws = CASE WHEN NEW.result = 'draw' THEN draws + 1 ELSE draws END,
+\n        current_streak = CASE 
+\n            WHEN NEW.result = 'win' THEN current_streak + 1
+\n            WHEN NEW.result = 'loss' THEN 0
+\n            ELSE current_streak
+\n        END,
+\n        total_damage_dealt = total_damage_dealt + NEW.damage_dealt,
+\n        total_damage_received = total_damage_received + NEW.damage_received,
+\n        total_cards_defeated = total_cards_defeated + NEW.cards_defeated,
+\n        total_turns_played = total_turns_played + NEW.turns_played,
+\n        total_special_abilities_used = total_special_abilities_used + NEW.special_abilities_used,
+\n        last_match_at = NEW.ended_at,
+\n        updated_at = NOW()
+\n    WHERE user_id = NEW.user_id;
+\n
+\n    -- Update longest streak if needed
+\n    UPDATE player_stats
+\n    SET longest_streak = current_streak
+\n    WHERE user_id = NEW.user_id
+\n    AND current_streak > longest_streak;
+\n
+\n    RETURN NEW;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
+"\n-- Function: get_leaderboard\nCREATE OR REPLACE FUNCTION public.get_leaderboard(limit_count integer DEFAULT 100, offset_count integer DEFAULT 0)\nRETURNS TABLE(user_id uuid, display_name text, avatar_url text, rank_points integer, rank_tier text, wins integer, losses integer, total_matches integer, current_streak integer, win_rate numeric)\nAS $$\n
+\nBEGIN
+\n    RETURN QUERY
+\n    SELECT 
+\n        ps.user_id,
+\n        pp.display_name,
+\n        pp.avatar_url,
+\n        ps.rank_points,
+\n        ps.rank_tier,
+\n        ps.wins,
+\n        ps.losses,
+\n        ps.total_matches,
+\n        ps.current_streak,
+\n        CASE 
+\n            WHEN ps.total_matches > 0 THEN 
+\n                (ps.wins::NUMERIC / ps.total_matches::NUMERIC) * 100
+\n            ELSE 0
+\n        END as win_rate
+\n    FROM player_stats ps
+\n    JOIN player_profiles pp ON ps.user_id = pp.user_id
+\n    ORDER BY ps.rank_points DESC
+\n    LIMIT limit_count
+\n    OFFSET offset_count;
+\nEND;
+\n\n$$ LANGUAGE plpgsql\nSECURITY DEFINER;\n"
 "\n-- Function: create_trade_listing\nCREATE OR REPLACE FUNCTION public.create_trade_listing(p_card_id uuid, p_seller_id uuid, p_token_price integer)\nRETURNS uuid\nAS $$\n
 \ndeclare
 \n  v_listing_id uuid;
@@ -881,22 +1066,28 @@ complete_database_export
 \n-- Grants for function: check_turn_timeout\nGRANT EXECUTE ON FUNCTION public.check_turn_timeout() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: commit_transaction\nGRANT EXECUTE ON FUNCTION public.commit_transaction() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: create_trade_listing\nGRANT EXECUTE ON FUNCTION public.create_trade_listing(p_card_id uuid, p_seller_id uuid, p_token_price integer) TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: ensure_player_settings\nGRANT EXECUTE ON FUNCTION public.ensure_player_settings() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: get_card_effects\nGRANT EXECUTE ON FUNCTION public.get_card_effects(p_card_id uuid) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: get_effect_value\nGRANT EXECUTE ON FUNCTION public.get_effect_value(effect_data jsonb) TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: get_leaderboard\nGRANT EXECUTE ON FUNCTION public.get_leaderboard(limit_count integer DEFAULT 100, offset_count integer DEFAULT 0) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: get_valid_properties_for_rarity\nGRANT EXECUTE ON FUNCTION public.get_valid_properties_for_rarity(card_rarity text) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: handle_card_generation_tokens\nGRANT EXECUTE ON FUNCTION public.handle_card_generation_tokens() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: handle_new_stripe_user\nGRANT EXECUTE ON FUNCTION public.handle_new_stripe_user() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: handle_new_user\nGRANT EXECUTE ON FUNCTION public.handle_new_user() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: log_token_transaction\nGRANT EXECUTE ON FUNCTION public.log_token_transaction() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: match_players\nGRANT EXECUTE ON FUNCTION public.match_players(player1_id uuid, player2_id uuid) TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: migrate_player_stats\nGRANT EXECUTE ON FUNCTION public.migrate_player_stats() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: process_matchmaking\nGRANT EXECUTE ON FUNCTION public.process_matchmaking() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: purchase_trade_listing\nGRANT EXECUTE ON FUNCTION public.purchase_trade_listing(p_listing_id uuid, p_buyer_id uuid, p_use_purchased_tokens boolean DEFAULT false) TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: rollback_transaction\nGRANT EXECUTE ON FUNCTION public.rollback_transaction() TO PUBLIC, anon, authenticated, postgres, service_role;
-\n-- Grants for function: sync_display_name\nGRANT EXECUTE ON FUNCTION public.sync_display_name() TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: sync_display_name\nGRANT EXECUTE ON FUNCTION public.sync_display_name() TO postgres, service_role;
 \n-- Grants for function: update_card_special_effects\nGRANT EXECUTE ON FUNCTION public.update_card_special_effects() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_collection_stats\nGRANT EXECUTE ON FUNCTION public.update_collection_stats() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_player_ranks\nGRANT EXECUTE ON FUNCTION public.update_player_ranks() TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: update_player_stats\nGRANT EXECUTE ON FUNCTION public.update_player_stats() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: update_timestamp\nGRANT EXECUTE ON FUNCTION public.update_timestamp() TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: update_updated_at_column\nGRANT EXECUTE ON FUNCTION public.update_updated_at_column() TO PUBLIC, anon, authenticated, postgres, service_role;
+\n-- Grants for function: update_updated_at_column\nGRANT EXECUTE ON FUNCTION public.update_updated_at_column() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: validate_card_effect_values\nGRANT EXECUTE ON FUNCTION public.validate_card_effect_values() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: validate_card_properties\nGRANT EXECUTE ON FUNCTION public.validate_card_properties() TO PUBLIC, anon, authenticated, postgres, service_role;
 \n-- Grants for function: validate_deck_cards\nGRANT EXECUTE ON FUNCTION public.validate_deck_cards() TO PUBLIC, anon, authenticated, postgres, service_role;

@@ -21,16 +21,7 @@ type User = {
   id: string;
 };
 
-type Settings = NonNullable<Database["public"]["Tables"]["player_profiles"]["Row"]["settings"]> & {
-  notifications: {
-    email: boolean;
-    inGame: boolean;
-  };
-  preferences: {
-    theme: string;
-    cardAnimation: boolean;
-  };
-};
+type Settings = Database["public"]["Tables"]["player_settings"]["Row"];
 
 interface SettingsFormProps {
   user: User;
@@ -66,7 +57,7 @@ export function SettingsForm({ user, settings }: SettingsFormProps) {
             </div>
             <Switch
               name="email_notifications"
-              defaultChecked={settings?.notifications?.email || true}
+              defaultChecked={settings?.email_notifications ?? true}
             />
           </div>
           <div className="flex items-center justify-between">
@@ -78,7 +69,7 @@ export function SettingsForm({ user, settings }: SettingsFormProps) {
             </div>
             <Switch
               name="ingame_notifications"
-              defaultChecked={settings?.notifications?.inGame || true}
+              defaultChecked={settings?.ingame_notifications ?? true}
             />
           </div>
         </div>
@@ -91,7 +82,7 @@ export function SettingsForm({ user, settings }: SettingsFormProps) {
             <Label>Theme Preference</Label>
             <Select
               name="theme"
-              defaultValue={settings?.preferences?.theme || "system"}
+              defaultValue={settings?.theme ?? "system"}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select theme" />
@@ -112,7 +103,7 @@ export function SettingsForm({ user, settings }: SettingsFormProps) {
             </div>
             <Switch
               name="card_animation"
-              defaultChecked={settings?.preferences?.cardAnimation || true}
+              defaultChecked={settings?.card_animation ?? true}
             />
           </div>
         </div>

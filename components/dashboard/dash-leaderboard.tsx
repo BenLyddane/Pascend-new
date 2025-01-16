@@ -6,7 +6,7 @@ import { createClient } from "@/utils/supabase/server";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Database } from "@/types/database.types";
 
-type PlayerProfile = Database["public"]["Tables"]["player_profiles"]["Row"];
+type LeaderboardPlayer = Database["public"]["Functions"]["get_leaderboard"]["Returns"][0];
 
 function getRankTierColor(tier: string | null) {
   switch (tier) {
@@ -32,33 +32,11 @@ function getWinRate(wins: number | null, totalMatches: number | null): string {
   return `${Math.round((wins / totalMatches) * 100)}%`;
 }
 
-async function getTopPlayers(): Promise<PlayerProfile[]> {
+async function getTopPlayers(): Promise<LeaderboardPlayer[]> {
   const supabase = await createClient();
 
   const { data: profiles, error } = await supabase
-    .from("player_profiles")
-    .select(`
-      user_id,
-      display_name,
-      avatar_url,
-      rank_points,
-      rank_tier,
-      wins,
-      losses,
-      total_matches,
-      current_streak,
-      longest_streak,
-      created_at,
-      draws,
-      free_tokens,
-      last_match_at,
-      purchased_tokens,
-      seasonal_rank_points,
-      season_highest_rank,
-      settings
-    `)
-    .order("rank_points", { ascending: false })
-    .limit(3);
+    .rpc('get_leaderboard', { limit_count: 3, offset_count: 0 });
 
   if (error || !profiles) {
     console.error("Error fetching leaderboard:", error);
