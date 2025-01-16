@@ -307,8 +307,9 @@ export default function CreateCardForm({
         <CardTitle>Create New Card</CardTitle>
         <CardDescription>
           Design your own unique card by describing it and choosing an art
-          style.
+          style. 
         </CardDescription>
+      
         <div className="mt-2 text-sm">
           {tokens !== null && (
             <div className="space-y-2">

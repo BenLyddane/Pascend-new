@@ -106,7 +106,7 @@ export default function Hero() {
                 Start Playing
               </Button>
             </Link>
-            <Link href="/protected/play">
+            <Link href="/protected/profile/rules">
               <Button 
                 size="lg" 
                 variant="outline" 

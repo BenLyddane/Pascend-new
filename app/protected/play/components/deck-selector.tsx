@@ -73,12 +73,23 @@ export default function DeckSelector({
   const [decks, setDecks] = useState<DeckWithCards[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyEligible, setShowOnlyEligible] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDeckForPreview, setSelectedDeckForPreview] =
     useState<DeckWithCards | null>(null);
   const decksPerPage = 6;
   const supabase = createClient();
   const [user, setUser] = useState<{ id: string } | null>(null);
+
+  const isDeckEligible = (deck: DeckWithCards) => {
+    // Check if deck has exactly 5 cards
+    if (deck.cards.length !== 5) return false;
+
+    // Check if any cards are listed for trade
+    return !deck.cards.some((card) =>
+      card.trade_listings?.some((listing) => listing.status === "active")
+    );
+  };
 
   useEffect(() => {
     async function initAuth() {
@@ -107,24 +118,16 @@ export default function DeckSelector({
     loadDecks();
   }, [user?.id]);
 
-  // Filter decks based on search query
+  // Filter decks based on search query and eligibility
   const filteredDecks = useMemo(() => {
-    return decks.filter(
-      (deck) =>
-        deck.name?.toLowerCase().includes(searchQuery.toLowerCase() || "") ??
-        false
-    );
-  }, [decks, searchQuery]);
-
-  const isDeckEligible = (deck: DeckWithCards) => {
-    // Check if deck has exactly 5 cards
-    if (deck.cards.length !== 5) return false;
-
-    // Check if any cards are listed for trade
-    return !deck.cards.some((card) =>
-      card.trade_listings?.some((listing) => listing.status === "active")
-    );
-  };
+    return decks.filter((deck) => {
+      const matchesSearch = deck.name?.toLowerCase().includes(searchQuery.toLowerCase() || "") ?? false;
+      if (showOnlyEligible) {
+        return matchesSearch && isDeckEligible(deck);
+      }
+      return matchesSearch;
+    });
+  }, [decks, searchQuery, showOnlyEligible]);
 
   if (loading) {
     return (
@@ -146,7 +149,19 @@ export default function DeckSelector({
     <div className="space-y-4">
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-lg font-semibold">{label}</h3>
-        <div className="w-64">
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showOnlyEligible}
+              onChange={(e) => {
+                setShowOnlyEligible(e.target.checked);
+                setCurrentPage(1); // Reset to first page when filter changes
+              }}
+              className="rounded border-gray-300"
+            />
+            Only Eligible Decks
+          </label>
           <Input
             type="text"
             placeholder="Search decks..."
@@ -155,7 +170,7 @@ export default function DeckSelector({
               setSearchQuery(e.target.value);
               setCurrentPage(1); // Reset to first page on search
             }}
-            className="w-full"
+            className="w-64"
           />
         </div>
       </div>
@@ -166,7 +181,7 @@ export default function DeckSelector({
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
-                  className={`p-4 rounded-lg border-2 transition-all ${
+                  className={`p-4 rounded-lg border-2 transition-all h-[360px] ${
                     selectedDeck?.id === deck.id
                       ? "border-primary bg-primary/10"
                       : !isDeckEligible(deck)
@@ -176,13 +191,13 @@ export default function DeckSelector({
                 >
                   <div className="w-full">
                     <div 
-                      className="flex justify-between items-start mb-2 cursor-pointer hover:opacity-80"
+                      className="mb-2 cursor-pointer hover:opacity-80"
                       onClick={() => setSelectedDeckForPreview(deck)}
                     >
-                      <div>
-                        <h4 className="font-medium">{deck.name}</h4>
+                      <div className="h-[24px] overflow-hidden">
+                        <h4 className="font-medium truncate">{deck.name}</h4>
                       </div>
-                      <div className="text-sm text-muted-foreground">
+                      <div className="text-sm text-muted-foreground h-[20px] overflow-hidden">
                         {deck.wins || 0}W - {deck.losses || 0}L
                       </div>
                     </div>
@@ -216,7 +231,7 @@ export default function DeckSelector({
                         Submit Deck
                       </button>
                     ) : (
-                      <div className="w-full px-4 py-2 rounded bg-destructive text-destructive-foreground text-center text-sm">
+                      <div className="w-full px-4 py-2 rounded border border-destructive bg-destructive/10 text-destructive text-center text-sm">
                         {deck.cards.length !== 5
                           ? "Deck requires exactly 5 cards"
                           : "Cards listed for trade"}

@@ -17,14 +17,19 @@ export default async function HeaderAuth() {
 
   // Fetch user profile if user exists
   let userDisplayName = null;
+  let free_tokens = 0;
+  let purchased_tokens = 0;
+  
   if (user) {
     const { data: profile } = await supabase
       .from("player_profiles")
-      .select("display_name")
+      .select("display_name, free_tokens, purchased_tokens")
       .eq("user_id", user.id)
       .single();
 
     userDisplayName = profile?.display_name;
+    free_tokens = profile?.free_tokens || 0;
+    purchased_tokens = profile?.purchased_tokens || 0;
   }
 
   if (!hasEnvVars) {
@@ -64,7 +69,12 @@ export default async function HeaderAuth() {
       <Button variant="ghost" asChild className="mr-2">
         <Link href="/protected">Pascend</Link>
       </Button>
-      <NavLinks email={user.email!} displayName={userDisplayName} />
+      <NavLinks 
+        email={user.email!} 
+        displayName={userDisplayName}
+        free_tokens={free_tokens}
+        purchased_tokens={purchased_tokens}
+      />
       <div className="flex items-center gap-4">
         <form action={signOutAction}>
           <Button

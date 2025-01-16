@@ -2,7 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { UserIcon, SettingsIcon, ShieldIcon, BarChartIcon } from "lucide-react";
+import { UserIcon, SettingsIcon, ShieldIcon, BarChartIcon, ScrollTextIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function ProfileNav() {
@@ -28,6 +28,11 @@ export default function ProfileNav() {
       name: "Stats",
       href: "/protected/profile/stats",
       icon: <BarChartIcon size={16} />,
+    },
+    {
+      name: "Rules",
+      href: "/protected/profile/rules",
+      icon: <ScrollTextIcon size={16} />,
     },
   ];
 
