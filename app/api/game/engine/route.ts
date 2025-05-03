@@ -1,200 +1,210 @@
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
-import { NextResponse } from "next/server";
-import {
-  GameActionType,
-  GameActionResult,
-  createGame,
-  processTurn,
-  endGame,
-  GameAutoProcessor,
-  GAME_ACTIONS,
-  ActionPayload,
-  CreateGamePayload,
-  ProcessTurnPayload,
-  EndGamePayload
-} from "./game-actions";
-import { GameCard } from "@/app/protected/play/game-engine/types";
-import { GameMode } from "@/app/protected/play/game-modes/types";
+import { GameState, createInitialGameState } from "@/app/protected/play/game-engine/types";
+import { validateGameAction } from "@/app/api/game/validate-game-action";
+import { validateAndConvertGameState, convertGameStateForDatabase } from "./utils/state-converter";
+import { GameAction, processGameAction } from "./game-actions";
 
-interface GameEngineRequest<T extends GameActionType = GameActionType> {
-  action: T;
-  gameId?: string;
-  payload: ActionPayload<T>;
+// Define the request types
+interface CreateGameRequest {
+  action: "CREATE_GAME";
+  payload: {
+    player1Cards: any[];
+    player2Cards: any[];
+    player1DeckId: string;
+    player2DeckId: string;
+    mode: string;
+    initialVersion?: number;
+    player1GoesFirst?: boolean;
+    player2Id?: string;
+  };
 }
 
-function isGameCard(obj: any): obj is GameCard {
-  return (
-    typeof obj === 'object' &&
-    obj !== null &&
-    typeof obj.id === 'string' &&
-    typeof obj.name === 'string' &&
-    typeof obj.power === 'number' &&
-    typeof obj.health === 'number'
-  );
+interface ProcessTurnRequest {
+  action: "PROCESS_TURN";
+  gameId: string;
+  payload: {
+    action: GameAction;
+    mode?: string;
+  };
 }
 
-function isCreateGamePayload(action: GameActionType, payload: any): payload is CreateGamePayload {
-  return (
-    action === 'CREATE_GAME' &&
-    typeof payload === 'object' &&
-    payload !== null &&
-    Array.isArray(payload.player1Cards) &&
-    Array.isArray(payload.player2Cards) &&
-    payload.player1Cards.every(isGameCard) &&
-    payload.player2Cards.every(isGameCard) &&
-    typeof payload.mode === 'string' &&
-    typeof payload.player1DeckId === 'string' &&
-    typeof payload.player2DeckId === 'string'
-  );
-}
+type GameEngineRequest = CreateGameRequest | ProcessTurnRequest;
 
-function isProcessTurnPayload(action: GameActionType, payload: any): payload is ProcessTurnPayload {
-  return (
-    action === 'PROCESS_TURN' &&
-    typeof payload === 'object' &&
-    payload !== null &&
-    typeof payload.action === 'object' &&
-    payload.action !== null &&
-    typeof payload.action.type === 'string' &&
-    typeof payload.mode === 'string'
-  );
-}
-
-function isEndGamePayload(action: GameActionType, payload: any): payload is EndGamePayload {
-  return (
-    action === 'END_GAME' &&
-    typeof payload === 'object' &&
-    payload !== null &&
-    (payload.winnerId === undefined || typeof payload.winnerId === 'string')
-  );
-}
-
-export async function POST(request: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+// Handler for POST requests
+export async function POST(request: NextRequest) {
   try {
-    const requestData = await request.json();
-    const { action, gameId, payload } = requestData as GameEngineRequest;
-
-    // Validate required parameters based on action metadata
-    const actionMeta = GAME_ACTIONS[action];
-    if (!actionMeta) {
-      return NextResponse.json(
-        { error: "Invalid action type" },
-        { status: 400 }
-      );
+    // Get the authenticated user
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-
-    if (actionMeta.requiresGameId && !gameId) {
-      return NextResponse.json(
-        { error: "Game ID is required for this action" },
-        { status: 400 }
-      );
+    
+    // Parse the request body
+    const body: GameEngineRequest = await request.json();
+    
+    // Handle the request based on the action
+    switch (body.action) {
+      case "CREATE_GAME":
+        return handleCreateGame(body, user.id, supabase);
+      
+      case "PROCESS_TURN":
+        return handleProcessTurn(body, user.id, supabase);
+      
+      default:
+        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
-
-    // Process the action
-    let result: GameActionResult;
-    switch (action) {
-      case "CREATE_GAME": {
-        if (!isCreateGamePayload(action, payload)) {
-          return NextResponse.json(
-            { error: "Invalid payload for CREATE_GAME action" },
-            { status: 400 }
-          );
-        }
-        result = await createGame(supabase, user.id, payload);
-        break;
-      }
-
-      case "PROCESS_TURN": {
-        if (!gameId) {
-          return NextResponse.json(
-            { error: "Game ID is required" },
-            { status: 400 }
-          );
-        }
-        if (!isProcessTurnPayload(action, payload)) {
-          return NextResponse.json(
-            { error: "Invalid payload for PROCESS_TURN action" },
-            { status: 400 }
-          );
-        }
-        result = await processTurn(supabase, gameId, payload);
-        break;
-      }
-
-      case "START_AUTO_PROCESSING": {
-        if (!gameId) {
-          return NextResponse.json(
-            { error: "Game ID is required" },
-            { status: 400 }
-          );
-        }
-
-        // Initialize auto processor
-        const processor = new GameAutoProcessor(supabase, gameId, user.id);
-        
-        // Start processing non-blocking
-        Promise.resolve(processor.startProcessing()).catch(error => {
-          console.error("[GameEngine] Auto processing error:", error);
-        });
-
-        result = { data: { success: true } };
-        break;
-      }
-
-      case "END_GAME": {
-        if (!gameId) {
-          return NextResponse.json(
-            { error: "Game ID is required" },
-            { status: 400 }
-          );
-        }
-        if (!isEndGamePayload(action, payload)) {
-          return NextResponse.json(
-            { error: "Invalid payload for END_GAME action" },
-            { status: 400 }
-          );
-        }
-        result = await endGame(supabase, gameId, user.id, payload);
-        break;
-      }
-
-      default: {
-        const _exhaustiveCheck: never = action;
-        return NextResponse.json(
-          { error: "Invalid action" },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Handle action result
-    if ('error' in result) {
-      return NextResponse.json(
-        { error: result.error },
-        { status: result.status || 500 }
-      );
-    }
-
-    return NextResponse.json(result.data);
   } catch (error) {
-    console.error("[GameEngine] Error:", error);
-    if (error instanceof Error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
+    console.error("Error processing game engine request:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+// Handler for creating a new game
+async function handleCreateGame(request: CreateGameRequest, userId: string, supabase: any) {
+  try {
+    const { player1Cards, player2Cards, player1DeckId, player2DeckId, mode, player1GoesFirst } = request.payload;
+    
+    // Validate the request
+    if (!player1Cards?.length || !player2Cards?.length) {
+      return NextResponse.json({ error: "Invalid deck configuration" }, { status: 400 });
+    }
+    
+    if (!player1DeckId || !player2DeckId) {
+      return NextResponse.json({ error: "Missing deck IDs" }, { status: 400 });
+    }
+    
+    if (!mode) {
+      return NextResponse.json({ error: "Game mode is required" }, { status: 400 });
+    }
+    
+    // Create the initial game state
+    const initialState = createInitialGameState(
+      player1Cards,
+      player2Cards,
+      player1GoesFirst !== undefined ? player1GoesFirst : Math.random() > 0.5
+    );
+    
+    // Determine the opponent ID (for practice mode, it's the same user)
+    const player2Id = mode === "practice" ? userId : request.payload.player2Id || userId;
+    
+    // Create the game in the database using the create_game_atomic function
+    const { data, error } = await supabase.rpc("create_game_atomic", {
+      p_user_id: userId,
+      p_mode: mode,
+      p_player2_id: player2Id,
+      p_game_state: initialState,
+      p_player1_deck_id: player1DeckId,
+      p_player2_deck_id: player2DeckId,
+      p_player1_goes_first: initialState.player1GoesFirst
+    });
+    
+    if (error) {
+      console.error("Error creating game:", error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    
+    // Return the game ID and initial state
+    return NextResponse.json({
+      gameId: data.id,
+      state: initialState
+    });
+  } catch (error) {
+    console.error("Error creating game:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to create game" },
+      { status: 500 }
+    );
+  }
+}
+
+// Handler for processing a turn
+async function handleProcessTurn(request: ProcessTurnRequest, userId: string, supabase: any) {
+  try {
+    const { gameId, payload } = request;
+    const { action, mode } = payload;
+    
+    // Get the current game state from the database
+    const { data: gameData, error: gameError } = await supabase
+      .from("active_games")
+      .select("game_state, player1_id, player2_id, current_player_id")
+      .eq("id", gameId)
+      .single();
+    
+    if (gameError || !gameData) {
+      return NextResponse.json({ error: "Game not found" }, { status: 404 });
+    }
+    
+    // Parse and validate the game state
+    let currentState: GameState;
+    try {
+      currentState = validateAndConvertGameState(gameData.game_state);
+    } catch (error) {
+      console.error("Invalid game state:", error);
+      return NextResponse.json({ 
+        error: error instanceof Error ? error.message : "Invalid game state" 
+      }, { status: 400 });
+    }
+    
+    // Check if it's the user's turn (skip for practice mode)
+    if (mode !== "practice" && gameData.current_player_id !== userId) {
+      return NextResponse.json({ error: "Not your turn" }, { status: 403 });
+    }
+    
+    // Validate the action
+    const isPlayer1 = gameData.player1_id === userId;
+    const validationResult = validateGameAction(action, currentState, isPlayer1);
+    if (!validationResult.isValid) {
+      return NextResponse.json({ error: validationResult.error }, { status: 400 });
+    }
+    
+    // Process the action
+    let newState: GameState;
+    try {
+      newState = processGameAction(currentState, action);
+    } catch (error) {
+      console.error("Error processing game action:", error);
+      return NextResponse.json({ 
+        error: error instanceof Error ? error.message : "Failed to process game action" 
+      }, { status: 400 });
+    }
+    
+    // Determine the current player for the next turn
+    const isPlayer1Turn = newState.currentTurn % 2 === (newState.player1GoesFirst ? 1 : 0);
+    const currentPlayerId = isPlayer1Turn ? gameData.player1_id : gameData.player2_id;
+    
+    // Update the game state in the database
+    const dbState = convertGameStateForDatabase(newState);
+    const { error: updateError } = await supabase
+      .from("active_games")
+      .update({
+        game_state: dbState,
+        current_turn_number: newState.currentTurn,
+        current_player_id: currentPlayerId,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", gameId);
+    
+    if (updateError) {
+      console.error("Error updating game state:", updateError);
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
+    }
+    
+    // Return the updated state
+    return NextResponse.json({
+      data: {
+        state: newState
+      }
+    });
+  } catch (error) {
+    console.error("Error processing turn:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to process turn" },
       { status: 500 }
     );
   }

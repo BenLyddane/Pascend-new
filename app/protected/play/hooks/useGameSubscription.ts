@@ -60,11 +60,6 @@ export function useGameSubscription({
 
         return validateAndConvertGameState(game.game_state);
       } catch (error) {
-        console.error(
-          `[GamePlay] Error fetching current state (attempt ${retryCount + 1}/3):`,
-          error
-        );
-
         if (retryCount < 2) {
           await new Promise((resolve) =>
             setTimeout(resolve, 1000 * Math.pow(2, retryCount))
@@ -80,12 +75,10 @@ export function useGameSubscription({
         const currentState = await fetchCurrentState();
 
         if (currentState.currentTurn > lastKnownState.currentTurn) {
-          console.log("[GamePlay] Updating to current state after gap");
           setGameState(currentState);
           lastKnownState = currentState;
         }
 
-        console.log(`[GamePlay] Setting up subscription for game ${gameId}`);
         const channel = supabase
           .channel(`game_${gameId}`, {
             config: {
@@ -106,77 +99,54 @@ export function useGameSubscription({
 
               try {
                 if (!payload.new?.game_state) {
-                  console.error("[GamePlay] Received update with no game state");
                   return;
                 }
 
                 const newGameState = validateAndConvertGameState(
                   payload.new.game_state
                 );
-                console.log("[GamePlay] Received new game state:", {
+
+                // Log the realtime payload and state update
+                console.log("[GamePlay] Received realtime update:", {
                   turn: newGameState.currentTurn,
                   battleLogLength: newGameState.battleLog.length,
+                  lastEntry: newGameState.battleLog[newGameState.battleLog.length - 1]
                 });
 
-                if (
-                  lastKnownState.currentTurn > 1 &&
-                  newGameState.currentTurn !== lastKnownState.currentTurn + 1
-                ) {
-                  console.log("[GamePlay] State discontinuity detected, syncing state");
-                  fetchCurrentState()
-                    .then((currentState) => {
-                      if (mounted) {
-                        console.log(
-                          "[GamePlay] Synced to current state:",
-                          currentState.currentTurn
-                        );
-                        setGameState(currentState);
-                        lastKnownState = currentState;
-                      }
-                    })
-                    .catch((error) => {
-                      console.error("[GamePlay] Error syncing state:", error);
-                      setError("Error syncing game state");
-                    });
-                  return;
-                }
+                // Force a UI update by creating a new object reference
+                const updatedState = {
+                  ...newGameState,
+                  // Add a timestamp to ensure React detects the change
+                  _lastUpdated: new Date().getTime()
+                };
 
-                setGameState(newGameState);
+                // Always update the game state to ensure UI is in sync
+                setGameState(updatedState);
                 lastKnownState = newGameState;
 
                 if (newGameState.winner) {
                   onGameEnd?.(newGameState.winner, newGameState.stats);
                 }
               } catch (error) {
-                console.error("[GamePlay] Error processing game state update:", error);
                 setError("Error updating game state");
               }
             }
           )
           .subscribe(async (status) => {
-            console.log(`[GamePlay] Subscription status:`, status);
             if (status === "SUBSCRIBED") {
-              console.log(`[GamePlay] Successfully subscribed to game ${gameId}`);
               setIsReconnecting(false);
               setReconnectAttempts(0);
               setError(null);
             } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
               if (lastKnownState.winner) {
-                console.log("[GamePlay] Game ended, ignoring connection close");
                 return;
               }
 
               if (!isReconnecting) {
-                console.log(`[GamePlay] Subscription ${status} for game ${gameId}`);
                 setIsReconnecting(true);
 
                 if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
                   const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 5000);
-                  console.log(
-                    `[GamePlay] Attempting to reconnect in ${delay}ms (attempt ${
-                      reconnectAttempts + 1
-                    })`
-                  );
                   setReconnectAttempts((prev) => prev + 1);
 
                   setTimeout(async () => {
@@ -196,10 +166,6 @@ export function useGameSubscription({
                           setIsReconnecting(false);
                         }
                       } catch (error) {
-                        console.error(
-                          "[GamePlay] Failed to fetch state during reconnect:",
-                          error
-                        );
                         if (mounted && !lastKnownState.winner) {
                           setError("Error reconnecting to game");
                         }
@@ -220,13 +186,11 @@ export function useGameSubscription({
         currentChannel = channel;
         return channel;
       } catch (error) {
-        console.error("[GamePlay] Error setting up subscription:", error);
         throw error;
       }
     };
 
     setupSubscription().catch((error) => {
-      console.error("[GamePlay] Fatal error in subscription setup:", error);
       if (mounted) {
         setError("Failed to connect to game server");
       }

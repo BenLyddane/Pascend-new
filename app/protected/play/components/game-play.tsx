@@ -65,13 +65,13 @@ export default function GamePlay({
   // Combine errors
   const error = initError || subscriptionError || profileError;
 
-  if (isLoading) {
+  if (isLoading || !gameState) {
     return <div>Loading game...</div>;
   }
 
   return (
     <GamePlayUI
-      gameState={currentGameState}
+      gameState={currentGameState || gameState}
       userName={userName}
       mode={mode}
       error={error}

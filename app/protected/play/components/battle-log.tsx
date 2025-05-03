@@ -1,295 +1,162 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useEffect, useRef } from "react";
+import type { BattleEffect, BattleLogEntry, CardBattleLogEntry, StateChangeLogEntry } from "./battle-log-types";
 import { cn } from "@/lib/utils";
-import {
-  BattleLogEntry,
-  BattleEffect,
-} from "@/app/protected/play/game-engine/types";
+import { isBattleLogEntry, isStateChangeLogEntry } from "./battle-log-types";
 
-type BattleLogProps = {
+interface BattleLogProps {
   entries: BattleLogEntry[];
-  player1GoesFirst?: boolean;
+  player1GoesFirst: boolean;
   player1Name: string;
   player2Name: string;
+}
+
+const EffectIcon = ({ type }: { type: BattleEffect["type"] }) => {
+  const iconMap: Record<BattleEffect["type"], string> = {
+    hit: "⚔️",
+    special: "✨",
+    stat: "📊",
+    defeat: "💀",
+    game_end: "🏆",
+    error: "⚠️",
+    state_change: "🔄",
+  };
+
+  return <span className="mr-2">{iconMap[type]}</span>;
 };
 
-const effectStyles = {
-  turn_start: {
-    bg: "bg-amber-500/10",
-    text: "text-amber-500",
-    defaultIcon: "🔄",
-  },
-  pre_combat: {
-    bg: "bg-emerald-500/10",
-    text: "text-emerald-500",
-    defaultIcon: "⚡",
-  },
-  combat: {
-    bg: "bg-red-500/10",
-    text: "text-red-500",
-    defaultIcon: "⚔️",
-  },
-  post_combat: {
-    bg: "bg-violet-500/10",
-    text: "text-violet-500",
-    defaultIcon: "🌟",
-  },
-  turn_end: {
-    bg: "bg-blue-500/10",
-    text: "text-blue-500",
-    defaultIcon: "🔄",
-  },
-  on_death: {
-    bg: "bg-purple-500/10",
-    text: "text-purple-500",
-    defaultIcon: "💀",
-  },
-  game_end: {
-    bg: "bg-yellow-500/10",
-    text: "text-yellow-500",
-    defaultIcon: "🏆",
-  },
-  error: {
-    bg: "bg-red-700/10",
-    text: "text-red-700",
-    defaultIcon: "⚠️",
-  },
-} as const;
-
-const effectIcons = {
-  Flame: "🔥",
-  Sword: "⚔️",
-  Shield: "🛡️",
-  ShieldCheck: "✅",
-  Heart: "❤️",
-  Bomb: "💣",
-  TrendingUp: "📈",
-  RefreshCw: "🔄",
-  Snowflake: "❄️",
-} as const;
-
-export default function BattleLog({
-  entries,
-  player1GoesFirst,
-  player1Name,
-  player2Name,
-}: BattleLogProps) {
-  // Filter out transitional entries (those with "No Card")
-  const combatEntries = entries.filter(
-    (entry) =>
-      entry.attacker.card.name !== "No Card" &&
-      entry.defender.card.name !== "No Card"
-  );
-  const renderEffect = (effect: BattleEffect, index: number, entry: BattleLogEntry) => {
-    const timing = effect.timing || "combat";
-    const style =
-      timing in effectStyles
-        ? effectStyles[timing as keyof typeof effectStyles]
-        : effectStyles.error;
-    const icon = effect.icon
-      ? effectIcons[effect.icon as keyof typeof effectIcons] || effect.icon
-      : style.defaultIcon;
-
-    let label = timing
-      .split("_")
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(" ");
-    if (effect.type === "hit") label = "Combat";
-    if (effect.type === "defeat") label = "Defeat";
-
-    // Process description to include card name and replace modifiers
-    let description = effect.description;
-    
-    // Replace {modifier} with actual card modifier value
-    if (description.includes("{modifier}")) {
-      const sourceCard = entry.attacker.card.name === effect.sourceCard 
-        ? entry.attacker.card 
-        : entry.defender.card;
-      description = description.replace(/{modifier}/g, sourceCard.modifier?.toString() || "0");
-    }
-
-    // Add source card name if not already present
-    if (effect.sourceCard && !description.includes(effect.sourceCard)) {
-      description = `[${effect.sourceCard}] ${description}`;
-    }
-
-    return (
-      <div
-        key={`${timing}-${index}`}
-        className={cn(
-          "flex items-center gap-2 text-sm p-2 rounded",
-          style.bg,
-          effect.type === "defeat" && "mt-1 text-base"
-        )}
-      >
-        <span className={cn("font-semibold", style.text)}>
-          {icon} {label}:
-        </span>
-        <span className="text-muted-foreground">{description}</span>
-      </div>
-    );
+const BattleEffectDisplay = ({ effect }: { effect: BattleEffect }) => {
+  const effectClasses = {
+    hit: "text-red-500",
+    special: "text-purple-500",
+    stat: "text-blue-500",
+    defeat: "text-gray-500",
+    game_end: "text-yellow-500 font-bold",
+    error: "text-red-600",
+    state_change: "text-green-500",
   };
 
   return (
-    <Card className="p-4 h-[calc(100vh-2rem)] sticky top-4">
-      <h4 className="font-semibold mb-4">Battle Log</h4>
-      <ScrollArea className="h-[calc(100vh-8rem)]">
-        <div className="space-y-4">
-          {combatEntries.map((entry: BattleLogEntry, index: number) => (
-            <Card
-              key={index}
-              className={cn(
-                "p-4",
-                "border-l-4",
-                entry.attacker.damage > entry.defender.damage
-                  ? "border-l-green-500"
-                  : entry.defender.damage > entry.attacker.damage
-                    ? "border-l-red-500"
-                    : "border-l-yellow-500"
-              )}
-            >
-              <div className="flex items-center gap-4 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <p className="font-medium">Turn {entry.turn}</p>
-                    <span className="text-xs text-muted-foreground">
-                      {entry.turn === 1
-                        ? `${player1GoesFirst ? player1Name : player2Name} goes first`
-                        : `${entry.attacker.card.name} attacks`}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={entry.attacker.card.image_url || "/placeholder.png"}
-                      alt={entry.attacker.card.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {entry.attacker.card.name}
-                      </p>
-                      <Progress
-                        value={
-                          (entry.attacker.endHealth /
-                            entry.attacker.card.health) *
-                          100
-                        }
-                        className="h-2"
-                        style={{
-                          backgroundColor: "rgba(255,255,255,0.1)",
-                          ["--progress-background" as string]: `hsl(${Math.max((entry.attacker.endHealth / entry.attacker.card.health) * 120, 0)}deg 80% 40%)`,
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {entry.attacker.endHealth} /{" "}
-                        {entry.attacker.card.health} HP
-                        {entry.attacker.damage > 0 && (
-                          <span className="text-red-500 ml-2">
-                            (-{entry.attacker.damage})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+    <div className={cn("flex items-center py-1", effectClasses[effect.type])}>
+      <EffectIcon type={effect.type} />
+      <span>{effect.description}</span>
+      {effect.sourceCard && (
+        <span className="ml-1 text-sm opacity-75">({effect.sourceCard})</span>
+      )}
+    </div>
+  );
+};
 
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <img
-                      src={entry.defender.card.image_url || "/placeholder.png"}
-                      alt={entry.defender.card.name}
-                      className="w-12 h-12 rounded-lg object-cover"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {entry.defender.card.name}
-                      </p>
-                      <Progress
-                        value={
-                          (entry.defender.endHealth /
-                            entry.defender.card.health) *
-                          100
-                        }
-                        className="h-2"
-                        style={{
-                          backgroundColor: "rgba(255,255,255,0.1)",
-                          ["--progress-background" as string]: `hsl(${Math.max((entry.defender.endHealth / entry.defender.card.health) * 120, 0)}deg 80% 40%)`,
-                        }}
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {entry.defender.endHealth} /{" "}
-                        {entry.defender.card.health} HP
-                        {entry.defender.damage > 0 && (
-                          <span className="text-red-500 ml-2">
-                            (-{entry.defender.damage})
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+const CardBattleEntry = ({ entry }: { entry: CardBattleLogEntry }) => {
+  return (
+    <div className="mb-4 border-b border-gray-200 pb-2">
+      <div className="font-semibold mb-2">
+        Turn {entry.turn}: {entry.attacker.card.name} ({entry.attacker.startHealth} HP) vs {entry.defender.card.name} ({entry.defender.startHealth} HP)
+      </div>
+      
+      {/* Simple Combat Summary */}
+      <div className="text-sm space-y-1">
+        <div>
+          {entry.attacker.card.name} dealt {entry.attacker.damage} damage
+          {entry.attacker.startHealth !== entry.attacker.endHealth && 
+            ` (HP: ${entry.attacker.startHealth} → ${entry.attacker.endHealth})`}
+        </div>
+        <div>
+          {entry.defender.card.name} dealt {entry.defender.damage} damage
+          {entry.defender.startHealth !== entry.defender.endHealth && 
+            ` (HP: ${entry.defender.startHealth} → ${entry.defender.endHealth})`}
+        </div>
+      </div>
 
-              {/* Power Display */}
-              <div className="flex justify-between mt-2 mb-3">
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Power: </span>
-                  <span className="font-medium">
-                    {entry.attacker.startPower}
-                  </span>
-                  {entry.attacker.startPower !== entry.attacker.endPower && (
-                    <span
-                      className={cn(
-                        "ml-1",
-                        entry.attacker.endPower > entry.attacker.startPower
-                          ? "text-green-500"
-                          : "text-red-500"
-                      )}
-                    >
-                      → {entry.attacker.endPower}
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Power: </span>
-                  <span className="font-medium">
-                    {entry.defender.startPower}
-                  </span>
-                  {entry.defender.startPower !== entry.defender.endPower && (
-                    <span
-                      className={cn(
-                        "ml-1",
-                        entry.defender.endPower > entry.defender.startPower
-                          ? "text-green-500"
-                          : "text-red-500"
-                      )}
-                    >
-                      → {entry.defender.endPower}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Effects Section */}
-              <div className="mt-2 space-y-2">
-                {/* Group and sort effects by timing */}
-                {[
-                  ...entry.effects.filter((e) => e.timing === "turn_start"),
-                  ...entry.effects.filter((e) => e.timing === "pre_combat"),
-                  ...entry.effects.filter((e) => e.timing === "combat"),
-                  ...entry.effects.filter((e) => e.timing === "post_combat"),
-                  ...entry.effects.filter((e) => e.timing === "turn_end"),
-                  ...entry.effects.filter((e) => e.timing === "on_death"),
-                  ...entry.effects.filter((e) => e.timing === "game_end"),
-                ].map((effect, i) => renderEffect(effect, i, entry))}
-              </div>
-            </Card>
+      {/* Effects */}
+      {entry.effects.length > 0 && (
+        <div className="mt-2 text-sm text-gray-600">
+          {entry.effects.map((effect, index) => (
+            <BattleEffectDisplay key={index} effect={effect} />
           ))}
         </div>
-      </ScrollArea>
-    </Card>
+      )}
+    </div>
+  );
+};
+
+const StateChangeEntry = ({ entry }: { entry: StateChangeLogEntry }) => {
+  return (
+    <div className="mb-4 border-b border-gray-200 pb-2">
+      <div className="text-sm text-gray-600">
+        <div className="flex items-center">
+          <EffectIcon type="state_change" />
+          <span>Turn {entry.turn}: {entry.description}</span>
+        </div>
+        {entry.effects.length > 0 && (
+          <div className="mt-2 ml-6">
+            {entry.effects.map((effect, index) => (
+              <BattleEffectDisplay key={index} effect={effect} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const LogEntry = ({ entry }: { entry: BattleLogEntry }) => {
+  if (isBattleLogEntry(entry)) {
+    return <CardBattleEntry entry={entry} />;
+  }
+  if (isStateChangeLogEntry(entry)) {
+    return <StateChangeEntry entry={entry} />;
+  }
+  return null;
+};
+
+export default function BattleLog({ entries, player1GoesFirst, player1Name, player2Name }: BattleLogProps) {
+  const logContainerRef = useRef<HTMLDivElement>(null);
+
+  // Debug logging for entry updates
+  useEffect(() => {
+    console.log("[BattleLog] Entries updated:", {
+      count: entries.length,
+      lastEntry: entries[entries.length - 1],
+      timestamp: new Date().toISOString()
+    });
+  }, [entries]);
+
+  // Auto-scroll to bottom when new entries are added
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [entries]);
+
+  return (
+    <div className="bg-white rounded-lg shadow-md p-4 h-full flex flex-col">
+      <h2 className="text-xl font-bold mb-4">Battle Log</h2>
+      
+      {/* Initial turn order display */}
+      <div className="text-center text-sm text-gray-600 mb-4 bg-gray-100 p-2 rounded">
+        {player1GoesFirst ? player1Name : player2Name} goes first
+      </div>
+
+      {/* Scrollable log container */}
+      <div 
+        ref={logContainerRef}
+        className="flex-1 overflow-y-auto space-y-2 pr-2 min-h-[400px]"
+      >
+        {entries.length === 0 ? (
+          <div className="text-center text-gray-500 mt-4">
+            Waiting for first turn...
+          </div>
+        ) : (
+          entries.map((entry) => (
+            <LogEntry 
+              key={entry.entryId || `entry-${entry.turn}-${entry.timestamp || Date.now()}`} 
+              entry={entry} 
+            />
+          ))
+        )}
+      </div>
+    </div>
   );
 }

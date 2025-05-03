@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { GAME_MODES } from "../../game-modes/types";
 import { GameSetupInstructions } from "./GameSetupInstructions";
 import { GameSetupTimer } from "./GameSetupTimer";
@@ -71,23 +71,24 @@ export function PracticeGameSetupManager({
     }
   };
 
+  // Track if setup has been completed to prevent multiple initializations
+  const [setupCompleted, setSetupCompleted] = useState(false);
+
+  // Use effect to handle setup completion when both players are ready
+  useEffect(() => {
+    if (readyStates.player1 && readyStates.player2 && !setupCompleted) {
+      console.log('Both players ready, completing setup');
+      setSetupCompleted(true);
+      onSetupComplete(remainingCards1, remainingCards2, true, true);
+    }
+  }, [readyStates, remainingCards1, remainingCards2, onSetupComplete, setupCompleted]);
+
   const handlePhaseComplete = (isPlayer1: boolean) => {
     console.log(`Player ${isPlayer1 ? '1' : '2'} ready`);
-    
-    setReadyStates(prev => {
-      const newReadyStates = {
-        ...prev,
-        [isPlayer1 ? 'player1' : 'player2']: true
-      };
-
-      // If both players are ready, complete setup
-      if (newReadyStates.player1 && newReadyStates.player2) {
-        console.log('Both players ready, completing setup');
-        onSetupComplete(remainingCards1, remainingCards2, true, true);
-      }
-
-      return newReadyStates;
-    });
+    setReadyStates(prev => ({
+      ...prev,
+      [isPlayer1 ? 'player1' : 'player2']: true
+    }));
   };
 
   return (

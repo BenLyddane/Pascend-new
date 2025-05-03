@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CardModal } from "@/components/card-modal";
-import { GameCard, CardState, GameState } from "../game-engine/types";
+import { GameState } from "./game-state-types";
+import { CardState } from "./battlefield-types";
+import { CardWithEffects } from "@/app/actions/fetchDecks";
 import { GameMode } from "../game-modes/types";
-import BattleLog from "./battle-log";
-import CardZone from "./card-zone";
-import GameResults from "./game-results";
+import BattleLog from "@/app/protected/play/components/battle-log";
+import Battlefield from "@/app/protected/play/components/battlefield";
+import GameResults from "@/app/protected/play/components/game-results";
 
 interface GamePlayUIProps {
   gameState: GameState | null;
@@ -25,8 +27,17 @@ export default function GamePlayUI({
   onReturnToMatchmaking,
   isOnlineMatch = false,
 }: GamePlayUIProps) {
-  const [selectedCard, setSelectedCard] = useState<GameCard | null>(null);
+  const [selectedCard, setSelectedCard] = useState<CardWithEffects | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Add a state to force re-render when game state changes
+  const [lastUpdate, setLastUpdate] = useState(Date.now());
+
+  // Force re-render when game state changes
+  useEffect(() => {
+    if (gameState) {
+      setLastUpdate(Date.now());
+    }
+  }, [gameState]);
 
   if (!gameState) {
     return <div>Loading game...</div>;
@@ -46,7 +57,7 @@ export default function GamePlayUI({
   return (
     <div className="grid grid-cols-2 gap-8 relative">
       {connectionStatus}
-      {/* Left Column: Card Zones and Results */}
+      {/* Left Column: Battlefield and Results */}
       <div className="flex flex-col gap-4 relative">
         <div className="space-y-4 relative">
           {/* Game Results Overlay */}
@@ -64,28 +75,20 @@ export default function GamePlayUI({
               />
             </div>
           )}
-          {/* Player's Cards */}
-          <CardZone
-            playerNumber={1}
-            playerName={userName}
-            cards={gameState.player1Cards}
-            currentBattleIndex={gameState.currentBattle.card1Index}
+          
+          {/* Battlefield - Add key to force re-render when game state changes */}
+          <Battlefield
+            key={`battlefield-${gameState.currentTurn}-${gameState.battleLog.length}`}
+            player1Cards={gameState.player1Cards}
+            player2Cards={gameState.player2Cards}
+            currentBattle={gameState.currentBattle}
             onCardClick={(cardState: CardState) => {
               setSelectedCard(cardState.card);
               setIsModalOpen(true);
             }}
-          />
-
-          {/* AI's Cards */}
-          <CardZone
-            playerNumber={2}
-            playerName={mode === "practice" ? "Player 2" : "AI Opponent"}
-            cards={gameState.player2Cards}
-            currentBattleIndex={gameState.currentBattle.card2Index}
-            onCardClick={(cardState: CardState) => {
-              setSelectedCard(cardState.card);
-              setIsModalOpen(true);
-            }}
+            battleLog={gameState.battleLog}
+            player1GoesFirst={gameState.player1GoesFirst}
+            isPlayer1Turn={gameState.currentTurn % 2 === (gameState.player1GoesFirst ? 1 : 0)}
           />
         </div>
       </div>
@@ -93,10 +96,11 @@ export default function GamePlayUI({
       {/* Right Column: Battle Log */}
       <div className="h-[calc(100vh-100px)]">
         <BattleLog
+          key={`battle-log-${gameState.currentTurn}-${gameState.battleLog.length}`}
           entries={gameState.battleLog}
           player1GoesFirst={gameState.player1GoesFirst}
           player1Name={userName}
-          player2Name={mode === "practice" ? "Player 2" : "AI Opponent"}
+          player2Name={mode === "practice" ? "AI Opponent" : "Opponent"}
         />
       </div>
 

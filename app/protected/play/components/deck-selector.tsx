@@ -1,293 +1,278 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useRef } from "react";
+import { DeckWithCards } from "@/app/actions/fetchDecks";
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { GameCardPractice } from "@/components/game-card-practice";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
+import { Search, X, Check, AlertCircle } from "lucide-react";
+import { 
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { CardRarity } from "@/types/game.types";
 import {
-  GameCard,
-  CardEffect,
-  convertToGameCard,
-} from "@/app/protected/play/game-engine/types";
-import { GameCardMinimal } from "@/components/game-card-minimal";
-import { GameCard as GameCardFull } from "@/components/game-card";
-import {
-  fetchDecks,
-  type DeckWithCards,
-  type CardWithEffects,
-} from "@/app/actions/fetchDecks";
-import { mergeSpecialEffects } from "@/app/actions/fetchCards";
-import { Database } from "@/types/database.types";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from "@/components/ui/hover-card";
 
-// Helper function to convert between deck types
-function convertDeck(
-  deck: DeckWithCards
-): Database["public"]["Tables"]["player_decks"]["Row"] & { cards: GameCard[] } {
-  return {
-    ...deck,
-    card_list: deck.cards.map((card) => ({ id: card.id })),
-    cards: deck.cards.map((card) => ({
-      ...card,
-      gameplay_effects: card.special_effects.map((effect) => ({
-        effect_type: effect.effect_type,
-        effect_icon: effect.effect_icon,
-        value: effect.value,
-      })),
-    })) as GameCard[],
-  };
+interface DeckSelectorProps {
+  label: string;
+  selectedDeck: DeckWithCards | null;
+  onDeckSelect: (deck: DeckWithCards) => void;
 }
-import { createClient } from "@/utils/supabase/client";
 
 export default function DeckSelector({
-  onDeckSelect,
+  label,
   selectedDeck,
-  label = "Select a Deck",
-}: {
-  onDeckSelect: (
-    deck:
-      | DeckWithCards
-      | (Database["public"]["Tables"]["player_decks"]["Row"] & {
-          cards: GameCard[];
-        })
-  ) => void;
-  selectedDeck?:
-    | DeckWithCards
-    | (Database["public"]["Tables"]["player_decks"]["Row"] & {
-        cards: GameCard[];
-      })
-    | null;
-  label?: string;
-}) {
+  onDeckSelect,
+}: DeckSelectorProps) {
   const [decks, setDecks] = useState<DeckWithCards[]>([]);
+  const [filteredDecks, setFilteredDecks] = useState<DeckWithCards[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showOnlyEligible, setShowOnlyEligible] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedDeckForPreview, setSelectedDeckForPreview] =
-    useState<DeckWithCards | null>(null);
-  const decksPerPage = 6;
-  const supabase = createClient();
-  const [user, setUser] = useState<{ id: string } | null>(null);
-
-  const isDeckEligible = (deck: DeckWithCards) => {
-    // Check if deck has exactly 5 cards
-    if (deck.cards.length !== 5) return false;
-
-    // Check if any cards are listed for trade
-    return !deck.cards.some((card) =>
-      card.trade_listings?.some((listing) => listing.status === "active")
-    );
-  };
+  const [showDeckList, setShowDeckList] = useState(!selectedDeck);
+  
+  // Ref to track if component is mounted
+  const isMounted = useRef(true);
 
   useEffect(() => {
-    async function initAuth() {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setUser(user);
-    }
-
-    initAuth();
+    // Set isMounted to false when component unmounts
+    return () => {
+      isMounted.current = false;
+    };
   }, []);
 
   useEffect(() => {
     async function loadDecks() {
-      if (!user?.id) return;
       try {
-        const result = await fetchDecks(user.id);
-        setDecks(result.decks);
-      } catch (error) {
-        console.error("Error fetching decks:", error);
+        setLoading(true);
+        
+        // Fetch decks using a dedicated API endpoint
+        const response = await fetch('/api/decks');
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch decks: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        
+        // Only update state if component is still mounted
+        if (isMounted.current) {
+          // Filter decks to only include those with exactly 5 cards
+          const validDecks = (result.decks || []).filter(
+            (deck: DeckWithCards) => deck.cards && deck.cards.length === 5
+          );
+          
+          setDecks(validDecks);
+          setFilteredDecks(validDecks);
+        }
+      } catch (err) {
+        console.error("Error loading decks:", err);
+        if (isMounted.current) {
+          setError("Failed to load decks");
+        }
       } finally {
-        setLoading(false);
+        if (isMounted.current) {
+          setLoading(false);
+        }
       }
     }
 
     loadDecks();
-  }, [user?.id]);
+  }, []);
 
-  // Filter decks based on search query and eligibility
-  const filteredDecks = useMemo(() => {
-    return decks.filter((deck) => {
-      const matchesSearch = deck.name?.toLowerCase().includes(searchQuery.toLowerCase() || "") ?? false;
-      if (showOnlyEligible) {
-        return matchesSearch && isDeckEligible(deck);
-      }
-      return matchesSearch;
-    });
-  }, [decks, searchQuery, showOnlyEligible]);
+  // Filter decks based on search query
+  useEffect(() => {
+    if (searchQuery.trim() === "") {
+      setFilteredDecks(decks);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = decks.filter(deck => 
+        deck.name.toLowerCase().includes(query) ||
+        deck.description?.toLowerCase().includes(query) ||
+        deck.cards.some(card => 
+          card.name.toLowerCase().includes(query) ||
+          card.description?.toLowerCase().includes(query)
+        )
+      );
+      setFilteredDecks(filtered);
+    }
+  }, [searchQuery, decks]);
+
+  const handleChangeDeck = () => {
+    setShowDeckList(true);
+  };
+
+  const handleSelectDeck = (deck: DeckWithCards) => {
+    onDeckSelect(deck);
+    setShowDeckList(false);
+  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-48">
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>{label}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+            <Skeleton className="h-12 w-full" />
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
-  // Calculate pagination
-  const totalPages = Math.ceil(filteredDecks.length / decksPerPage);
-  const startIndex = (currentPage - 1) * decksPerPage;
-  const paginatedDecks = filteredDecks.slice(
-    startIndex,
-    startIndex + decksPerPage
-  );
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>{label}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-red-100 text-red-700 rounded-md flex items-center gap-2">
+            <AlertCircle size={18} />
+            <span>{error}</span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-semibold">{label}</h3>
-        <div className="flex items-center gap-4">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={showOnlyEligible}
-              onChange={(e) => {
-                setShowOnlyEligible(e.target.checked);
-                setCurrentPage(1); // Reset to first page when filter changes
-              }}
-              className="rounded border-gray-300"
-            />
-            Only Eligible Decks
-          </label>
-          <Input
-            type="text"
-            placeholder="Search decks..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1); // Reset to first page on search
-            }}
-            className="w-64"
-          />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {paginatedDecks.map((deck) => (
-          <TooltipProvider key={deck.id}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div
-                  className={`p-4 rounded-lg border-2 transition-all h-[360px] ${
-                    selectedDeck?.id === deck.id
-                      ? "border-primary bg-primary/10"
-                      : !isDeckEligible(deck)
-                        ? "border-muted opacity-50"
-                        : "border-muted"
-                  }`}
-                >
-                  <div className="w-full">
-                    <div 
-                      className="mb-2 cursor-pointer hover:opacity-80"
-                      onClick={() => setSelectedDeckForPreview(deck)}
-                    >
-                      <div className="h-[24px] overflow-hidden">
-                        <h4 className="font-medium truncate">{deck.name}</h4>
-                      </div>
-                      <div className="text-sm text-muted-foreground h-[20px] overflow-hidden">
-                        {deck.wins || 0}W - {deck.losses || 0}L
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col items-center gap-2">
-                      {deck.cards[0] && (
-                        <div className="w-full">
-                          <GameCardMinimal
-                            card={deck.cards[0] as CardWithEffects}
-                            className="w-full"
-                            disableModal
-                            onClick={() => setSelectedDeckForPreview(deck)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="mt-2">
-                    {isDeckEligible(deck) ? (
-                      <button
-                        onClick={() =>
-                          onDeckSelect(
-                            "gameplay_effects" in deck.cards[0]
-                              ? deck
-                              : convertDeck(deck)
-                          )
-                        }
-                        className="w-full px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
-                      >
-                        Submit Deck
-                      </button>
-                    ) : (
-                      <div className="w-full px-4 py-2 rounded border border-destructive bg-destructive/10 text-destructive text-center text-sm">
-                        {deck.cards.length !== 5
-                          ? "Deck requires exactly 5 cards"
-                          : "Cards listed for trade"}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </TooltipTrigger>
-            </Tooltip>
-          </TooltipProvider>
-        ))}
-      </div>
-
-      <Dialog
-        open={!!selectedDeckForPreview}
-        onOpenChange={() => setSelectedDeckForPreview(null)}
-      >
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{selectedDeckForPreview?.name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4 pb-4">
-            {selectedDeckForPreview?.cards.map((card, index) => (
-              <GameCardFull
-                key={card.id}
-                card={card as CardWithEffects}
-              />
+  if (selectedDeck && !showDeckList) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex justify-between items-center">
+            <span>{label}: {selectedDeck.name}</span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleChangeDeck}
+            >
+              Change
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap justify-center gap-4">
+            {selectedDeck.cards.map((card) => (
+              <div key={card.id} className="w-[150px]">
+                <GameCardPractice card={card} />
+              </div>
             ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        </CardContent>
+      </Card>
+    );
+  }
 
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center gap-2 mt-4">
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-            className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 disabled:opacity-50"
-          >
-            Previous
-          </button>
-          <span className="px-3 py-1">
-            Page {currentPage} of {totalPages}
-          </span>
-          <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(totalPages, prev + 1))
-            }
-            disabled={currentPage === totalPages}
-            className="px-3 py-1 rounded bg-primary/10 hover:bg-primary/20 disabled:opacity-50"
-          >
-            Next
-          </button>
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex justify-between items-center">
+          <span>{label}</span>
+          {selectedDeck && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowDeckList(false)}
+            >
+              <X size={16} className="mr-1" /> Cancel
+            </Button>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="mb-4 relative">
+          <Input
+            placeholder="Search decks..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={16} />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+              onClick={() => setSearchQuery("")}
+            >
+              <X size={14} />
+            </Button>
+          )}
         </div>
-      )}
-    </div>
+        
+        <ScrollArea className="h-[300px] pr-4">
+          <div className="space-y-2">
+            {filteredDecks.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                {decks.length === 0 ? (
+                  <p>
+                    No decks found with exactly 5 cards. Create a deck in the Collection section.
+                  </p>
+                ) : (
+                  <p>No decks match your search criteria.</p>
+                )}
+              </div>
+            ) : (
+              filteredDecks.map((deck) => (
+                <HoverCard key={deck.id} openDelay={300} closeDelay={100}>
+                  <HoverCardTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => handleSelectDeck(deck)}
+                    >
+                      <span>{deck.name}</span>
+                      <div className="flex items-center gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center text-green-600">
+                                <Check size={16} className="mr-1" />
+                                <span>5 cards</span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              This deck has exactly 5 cards and is ready for battle
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
+                    </Button>
+                  </HoverCardTrigger>
+                  <HoverCardContent className="w-96 p-0" align="end">
+                    <div className="p-4 bg-muted/50">
+                      <h4 className="font-semibold">{deck.name}</h4>
+                      <p className="text-sm text-muted-foreground">{deck.description}</p>
+                    </div>
+                    <div className="p-4">
+                      <div className="flex flex-wrap justify-center gap-4">
+                        {deck.cards.map((card) => (
+                          <div key={card.id} className="transform transition-transform hover:scale-105 w-[150px]">
+                            <GameCardPractice card={card} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </HoverCardContent>
+                </HoverCard>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      </CardContent>
+    </Card>
   );
 }

@@ -71,6 +71,7 @@ export interface BaseCardEffect {
   effect_type: string;
   effect_icon: string;
   value: number;
+  temporary?: boolean; // Optional flag for temporary effects that should be cleaned up
 }
 
 // Full effect type from database

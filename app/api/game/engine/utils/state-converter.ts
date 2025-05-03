@@ -1,54 +1,98 @@
-import { Json } from "@/types/database.types";
-import { GameState, CardState, VisibleCardState, BattleLogEntry } from "@/app/protected/play/game-engine/types";
+import { GameState } from "@/app/protected/play/game-engine/types";
 
-// Type guard to check if a value matches the GameState structure
-export function isValidGameState(json: unknown): json is GameState {
-  if (!json || typeof json !== 'object' || Array.isArray(json)) return false;
-
-  const state = json as any;
-  return (
-    typeof state.currentTurn === 'number' &&
-    typeof state.player1GoesFirst === 'boolean' &&
-    Array.isArray(state.player1Cards) &&
-    Array.isArray(state.player2Cards) &&
-    Array.isArray(state.player1VisibleCards) &&
-    Array.isArray(state.player2VisibleCards) &&
-    typeof state.currentBattle === 'object' &&
-    typeof state.currentBattle.card1Index === 'number' &&
-    typeof state.currentBattle.card2Index === 'number' &&
-    Array.isArray(state.battleLog) &&
-    typeof state.stats === 'object'
-  );
-}
-
-// Convert database Json to GameState with validation
-export function validateAndConvertGameState(json: Json | null): GameState {
-  const parsed = typeof json === 'string' ? JSON.parse(json) : json;
-  
-  if (!isValidGameState(parsed)) {
-    throw new Error('Invalid game state structure');
+/**
+ * Validates and converts a game state from the database to the game engine format
+ * @param state The game state from the database
+ * @returns The validated and converted game state
+ */
+export function validateAndConvertGameState(state: any): GameState {
+  // Ensure the state has all required properties
+  if (!state || typeof state !== 'object') {
+    throw new Error('Invalid game state: state must be an object');
   }
-
-  return parsed;
+  
+  // Check required properties
+  const requiredProps = [
+    'gameId', 
+    'player1Cards', 
+    'player2Cards', 
+    'currentTurn', 
+    'player1GoesFirst', 
+    'status'
+  ];
+  
+  for (const prop of requiredProps) {
+    if (!(prop in state)) {
+      throw new Error(`Invalid game state: missing required property '${prop}'`);
+    }
+  }
+  
+  // Ensure player cards are arrays
+  if (!Array.isArray(state.player1Cards) || !Array.isArray(state.player2Cards)) {
+    throw new Error('Invalid game state: player cards must be arrays');
+  }
+  
+  // Ensure each card has required properties
+  const validateCard = (card: any, index: number, player: number) => {
+    if (!card || typeof card !== 'object') {
+      throw new Error(`Invalid card at player ${player}, index ${index}: card must be an object`);
+    }
+    
+    const requiredCardProps = [
+      'id', 
+      'power', 
+      'health', 
+      'maxHealth', 
+      'position', 
+      'isDefeated'
+    ];
+    
+    for (const prop of requiredCardProps) {
+      if (!(prop in card)) {
+        throw new Error(`Invalid card at player ${player}, index ${index}: missing required property '${prop}'`);
+      }
+    }
+  };
+  
+  state.player1Cards.forEach((card: any, index: number) => validateCard(card, index, 1));
+  state.player2Cards.forEach((card: any, index: number) => validateCard(card, index, 2));
+  
+  // Ensure activeCardIndices exists or create it
+  if (!state.activeCardIndices) {
+    state.activeCardIndices = {
+      player1: state.player1Cards.findIndex((card: any) => !card.isDefeated),
+      player2: state.player2Cards.findIndex((card: any) => !card.isDefeated)
+    };
+  }
+  
+  // Ensure events array exists
+  if (!state.events) {
+    state.events = [];
+  }
+  
+  // Ensure version exists
+  if (state.version === undefined) {
+    state.version = 1;
+  }
+  
+  // Ensure lastUpdated exists
+  if (state.lastUpdated === undefined) {
+    state.lastUpdated = Date.now();
+  }
+  
+  return state as GameState;
 }
 
-// Convert GameState to database Json
-export function serializeGameState(state: GameState): Json {
-  const serialized = JSON.parse(JSON.stringify({
-    ...state,
-    // Ensure all required GameState properties are serialized
-    currentTurn: state.currentTurn,
-    player1GoesFirst: state.player1GoesFirst,
-    player1Cards: state.player1Cards,
-    player2Cards: state.player2Cards,
-    player1VisibleCards: state.player1VisibleCards,
-    player2VisibleCards: state.player2VisibleCards,
-    currentBattle: state.currentBattle,
-    battleLog: state.battleLog,
-    stats: state.stats,
-    winner: state.winner,
-    version: state.version || 0
-  }));
-
-  return serialized;
+/**
+ * Converts a game state to a format suitable for storing in the database
+ * @param state The game state to convert
+ * @returns The converted game state
+ */
+export function convertGameStateForDatabase(state: GameState): any {
+  // Create a deep copy of the state
+  const dbState = JSON.parse(JSON.stringify(state));
+  
+  // Add any database-specific properties or transformations here
+  
+  return dbState;
 }

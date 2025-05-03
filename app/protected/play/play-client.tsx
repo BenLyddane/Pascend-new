@@ -5,9 +5,8 @@ import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import PracticeMode from "./components/practice-mode";
 import Matchmaking from "./components/matchmaking";
-import TestMatchmaking from "./components/test-matchmaking";
 
-type GameMode = "practice" | "matchmaking" | "test-matchmaking";
+type GameMode = "practice" | "matchmaking";
 
 export default function PlayClient() {
   const [gameMode, setGameMode] = useState<GameMode>("practice");
@@ -31,57 +30,42 @@ export default function PlayClient() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-8">
           <button
-            className={`p-4 rounded-lg border-2 ${
+            className={`p-6 rounded-lg border-2 ${
               gameMode === "practice"
                 ? "border-primary bg-primary/10"
                 : "border-muted"
             }`}
             onClick={() => setGameMode("practice")}
           >
-            <div className="font-semibold">Practice Mode</div>
-            <p className="text-sm text-muted-foreground">
-              Play against yourself to test deck combinations
+            <div className="font-semibold text-xl mb-2">Practice Mode</div>
+            <p className="text-muted-foreground">
+              Play against yourself to test deck combinations. Ban cards, reorder your deck, and watch the auto-battle unfold!
             </p>
           </button>
 
           <button
-            className={`p-4 rounded-lg border-2 ${
+            className={`p-6 rounded-lg border-2 ${
               gameMode === "matchmaking"
                 ? "border-primary bg-primary/10"
                 : "border-muted"
             }`}
             onClick={() => setGameMode("matchmaking")}
           >
-            <div className="font-semibold">Matchmaking</div>
-            <p className="text-sm text-muted-foreground">
-              Battle against other players
-            </p>
-          </button>
-          <button
-            className={`p-4 rounded-lg border-2 ${
-              gameMode === "test-matchmaking"
-                ? "border-primary bg-primary/10"
-                : "border-muted"
-            }`}
-            onClick={() => setGameMode("test-matchmaking")}
-          >
-            <div className="font-semibold">Test Matchmaking</div>
-            <p className="text-sm text-muted-foreground">
-              Test matchmaking with simulated opponents
+            <div className="font-semibold text-xl mb-2">Multiplayer</div>
+            <p className="text-muted-foreground">
+              Battle against other players online. Ban cards, reorder your deck, and compete for glory!
             </p>
           </button>
         </div>
 
         {/* Game mode components */}
-        <div className="mt-4">
+        <div className="mt-8">
           {gameMode === "practice" ? (
             <PracticeMode />
-          ) : gameMode === "matchmaking" ? (
-            <Matchmaking />
           ) : (
-            <TestMatchmaking />
+            <Matchmaking />
           )}
         </div>
       </div>

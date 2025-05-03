@@ -1,236 +1,134 @@
-import { GameAction, GameState, CardState } from "@/app/protected/play/game-engine/types";
+import { GameAction } from "@/app/api/game/engine/game-actions";
 
 interface ValidationResult {
   isValid: boolean;
   error?: string;
 }
 
+/**
+ * Validates a game action against the current game state
+ * @param action The action to validate
+ * @param state The current game state
+ * @param isPlayer1 Whether the action is being performed by player 1
+ * @returns Validation result
+ */
 export function validateGameAction(
   action: GameAction,
-  gameState: GameState,
+  state: any,
   isPlayer1: boolean
 ): ValidationResult {
-  // Validate basic game state
-  if (gameState.winner !== null) {
+  // If the game is already completed, no actions are allowed
+  if (state.status === "completed") {
     return {
       isValid: false,
-      error: "Game is already finished",
+      error: "Game is already completed"
     };
   }
-
-  // Determine if it's the player's turn
-  const isPlayerTurn =
-    (isPlayer1 && gameState.currentTurn % 2 === (gameState.player1GoesFirst ? 1 : 0)) ||
-    (!isPlayer1 && gameState.currentTurn % 2 === (gameState.player1GoesFirst ? 0 : 1));
-
-  if (!isPlayerTurn) {
-    return {
-      isValid: false,
-      error: "Not your turn",
-    };
-  }
-
-  // Validate specific action types
+  
+  // Validate based on action type
   switch (action.type) {
-    case "PLAY_CARD":
-      return validatePlayCard(action, gameState, isPlayer1);
-    case "USE_EFFECT":
-      return validateUseEffect(action, gameState, isPlayer1);
+    case "ATTACK":
+      return validateAttackAction(action.payload, state, isPlayer1);
+    
     case "END_TURN":
-      return validateEndTurn(gameState);
+      return validateEndTurnAction(action.payload, state, isPlayer1);
+    
+    case "GET_STATE":
+      // Always allow getting the state
+      return { isValid: true };
+    
     default:
       return {
         isValid: false,
-        error: "Invalid action type",
+        error: `Unknown action type: ${action.type}`
       };
   }
 }
 
-function validatePlayCard(
-  action: GameAction,
-  gameState: GameState,
+/**
+ * Validates an attack action
+ * @param payload The attack payload
+ * @param state The current game state
+ * @param isPlayer1 Whether the action is being performed by player 1
+ * @returns Validation result
+ */
+function validateAttackAction(
+  payload: any,
+  state: any,
   isPlayer1: boolean
 ): ValidationResult {
-  const { cardId } = action.payload;
-  if (!cardId) {
+  // Check if it's the player's turn
+  const isPlayer1Turn = state.currentTurn % 2 === (state.player1GoesFirst ? 1 : 0);
+  if (isPlayer1Turn !== isPlayer1) {
     return {
       isValid: false,
-      error: "Card ID is required",
+      error: "Not your turn"
     };
   }
-
-  // Get the player's cards
-  const playerCards = isPlayer1 ? gameState.player1Cards : gameState.player2Cards;
-  const cardIndex = playerCards.findIndex((c) => c.card.id === cardId);
-
-  if (cardIndex === -1) {
-    return {
-      isValid: false,
-      error: "Card not found in player's deck",
-    };
-  }
-
-  const card = playerCards[cardIndex];
-
-  // Check if card is already defeated
-  if (card.isDefeated) {
-    return {
-      isValid: false,
-      error: "Cannot play defeated card",
-    };
-  }
-
-  // Check if it's the correct card's turn
-  const currentIndex = isPlayer1
-    ? gameState.currentBattle.card1Index
-    : gameState.currentBattle.card2Index;
-  if (cardIndex !== currentIndex) {
-    return {
-      isValid: false,
-      error: "Not this card's turn",
-    };
-  }
-
-  return { isValid: true };
-}
-
-function validateUseEffect(
-  action: GameAction,
-  gameState: GameState,
-  isPlayer1: boolean
-): ValidationResult {
-  const { cardId, effectIndex } = action.payload;
-  if (!cardId || typeof effectIndex !== "number") {
-    return {
-      isValid: false,
-      error: "Card ID and effect index are required",
-    };
-  }
-
-  // Get the player's cards
-  const playerCards = isPlayer1 ? gameState.player1Cards : gameState.player2Cards;
-  const card = playerCards.find((c) => c.card.id === cardId);
-
-  if (!card) {
-    return {
-      isValid: false,
-      error: "Card not found in player's deck",
-    };
-  }
-
-  // Check if effect exists
-  if (!card.effects || !card.effects[effectIndex]) {
-    return {
-      isValid: false,
-      error: "Effect not found",
-    };
-  }
-
-  // Check if card is active
-  if (card.isDefeated) {
-    return {
-      isValid: false,
-      error: "Cannot use effect of defeated card",
-    };
-  }
-
-  // Validate effect timing
-  const effect = card.effects[effectIndex];
-  const validTiming = validateEffectTiming(effect.effect_type, gameState);
-  if (!validTiming.isValid) {
-    return validTiming;
-  }
-
-  return { isValid: true };
-}
-
-function validateEndTurn(gameState: GameState): ValidationResult {
-  // Basic validation for turn end
-  // Could add more complex validation based on game rules
-  return { isValid: true };
-}
-
-function validateEffectTiming(effectType: string, gameState: GameState): ValidationResult {
-  // Validate effect timing based on current game phase
-  // This would need to be expanded based on your game's specific rules
-  return { isValid: true };
-}
-
-export function validateGameState(gameState: GameState): ValidationResult {
-  // Validate overall game state integrity
-  try {
-    // Check for valid card counts
-    if (gameState.player1Cards.length !== 5 || gameState.player2Cards.length !== 5) {
-      return {
-        isValid: false,
-        error: "Invalid deck size",
-      };
-    }
-
-    // Validate card properties
-    const allCards = [...gameState.player1Cards, ...gameState.player2Cards];
-    for (const card of allCards) {
-      if (!validateCardState(card).isValid) {
-        return {
-          isValid: false,
-          error: "Invalid card state detected",
-        };
-      }
-    }
-
-    // Validate turn counter
-    if (gameState.currentTurn < 1) {
-      return {
-        isValid: false,
-        error: "Invalid turn counter",
-      };
-    }
-
-    // Validate battle indices
-    if (
-      gameState.currentBattle.card1Index < 0 ||
-      gameState.currentBattle.card1Index >= 5 ||
-      gameState.currentBattle.card2Index < 0 ||
-      gameState.currentBattle.card2Index >= 5
-    ) {
-      return {
-        isValid: false,
-        error: "Invalid battle indices",
-      };
-    }
-
-    return { isValid: true };
-  } catch (error) {
-    return {
-      isValid: false,
-      error: "Game state validation failed",
-    };
-  }
-}
-
-function validateCardState(cardState: CardState): ValidationResult {
-  // Validate individual card state
+  
+  // Check if the attacker index is valid
+  const attackerCards = isPlayer1 ? state.player1Cards : state.player2Cards;
   if (
-    cardState.health < 0 ||
-    cardState.health > 999 ||
-    cardState.power < 0 ||
-    cardState.power > 999 ||
-    cardState.maxHealth < 1 ||
-    cardState.maxHealth > 999
+    payload.attackerIndex < 0 ||
+    payload.attackerIndex >= attackerCards.length
   ) {
     return {
       isValid: false,
-      error: "Invalid card properties",
+      error: "Invalid attacker index"
     };
   }
-
-  // Validate effects array
-  if (!Array.isArray(cardState.effects)) {
+  
+  // Check if the target index is valid
+  const defenderCards = isPlayer1 ? state.player2Cards : state.player1Cards;
+  if (
+    payload.targetIndex < 0 ||
+    payload.targetIndex >= defenderCards.length
+  ) {
     return {
       isValid: false,
-      error: "Invalid effects array",
+      error: "Invalid target index"
     };
   }
+  
+  // Check if the attacker is defeated
+  if (attackerCards[payload.attackerIndex].isDefeated) {
+    return {
+      isValid: false,
+      error: "Attacker is defeated"
+    };
+  }
+  
+  // Check if the target is defeated
+  if (defenderCards[payload.targetIndex].isDefeated) {
+    return {
+      isValid: false,
+      error: "Target is defeated"
+    };
+  }
+  
+  return { isValid: true };
+}
 
+/**
+ * Validates an end turn action
+ * @param payload The end turn payload
+ * @param state The current game state
+ * @param isPlayer1 Whether the action is being performed by player 1
+ * @returns Validation result
+ */
+function validateEndTurnAction(
+  payload: any,
+  state: any,
+  isPlayer1: boolean
+): ValidationResult {
+  // Check if it's the player's turn
+  const isPlayer1Turn = state.currentTurn % 2 === (state.player1GoesFirst ? 1 : 0);
+  if (isPlayer1Turn !== isPlayer1) {
+    return {
+      isValid: false,
+      error: "Not your turn"
+    };
+  }
+  
   return { isValid: true };
 }
