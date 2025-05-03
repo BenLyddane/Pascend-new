@@ -5,7 +5,7 @@ import CoinFlip from "./coin-flip";
 import { updateMatchStats } from "@/app/actions/updateMatchStats";
 import { createClient } from "@/utils/supabase/client";
 import { DeckWithCards, CardWithEffects } from "@/app/actions/fetchDecks";
-import DeckSelector from "./deck-selector";
+import SimpleDeckSelector from "./simple-deck-selector";
 import BattleVisualizer from "./battle-visualizer";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -292,15 +292,17 @@ export default function PracticeMode() {
     return (
       <div className="space-y-8">
         <div className="grid grid-cols-2 gap-8">
-          <DeckSelector
+          <SimpleDeckSelector
+            key="deck-selector-player1" // Use a stable key
             label="Player 1's Deck"
             selectedDeck={selectedDecks.deck1}
-            onDeckSelect={(deck) => handleDeckSelect(deck, true)}
+            onDeckSelect={(deck: DeckWithCards) => handleDeckSelect(deck, true)}
           />
-          <DeckSelector
+          <SimpleDeckSelector
+            key="deck-selector-player2" // Use a stable key
             label="Player 2's Deck"
             selectedDeck={selectedDecks.deck2}
-            onDeckSelect={(deck) => handleDeckSelect(deck, false)}
+            onDeckSelect={(deck: DeckWithCards) => handleDeckSelect(deck, false)}
           />
         </div>
 
@@ -570,11 +572,12 @@ export default function PracticeMode() {
             
             // Save match stats to the database
             try {
-              // Add deck IDs to the game state for stats tracking
+              // Add deck IDs and mode to the game state for stats tracking
               const gameStateWithDecks = {
                 ...finalState,
                 player1DeckId: selectedDecks.deck1?.id,
-                player2DeckId: selectedDecks.deck2?.id
+                player2DeckId: selectedDecks.deck2?.id,
+                mode: "practice" // Explicitly set mode to practice
               };
               
               // Save match stats

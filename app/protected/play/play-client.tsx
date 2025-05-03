@@ -4,9 +4,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { PlusCircle } from "lucide-react";
 import PracticeMode from "./components/practice-mode";
-import Matchmaking from "./components/matchmaking";
+import MultiplayerMode from "./components/multiplayer-mode";
+import { DeckProvider } from "./context/DeckContext";
 
-type GameMode = "practice" | "matchmaking";
+type GameMode = "practice" | "multiplayer";
 
 export default function PlayClient() {
   const [gameMode, setGameMode] = useState<GameMode>("practice");
@@ -47,11 +48,11 @@ export default function PlayClient() {
 
           <button
             className={`p-6 rounded-lg border-2 ${
-              gameMode === "matchmaking"
+              gameMode === "multiplayer"
                 ? "border-primary bg-primary/10"
                 : "border-muted"
             }`}
-            onClick={() => setGameMode("matchmaking")}
+            onClick={() => setGameMode("multiplayer")}
           >
             <div className="font-semibold text-xl mb-2">Multiplayer</div>
             <p className="text-muted-foreground">
@@ -60,14 +61,16 @@ export default function PlayClient() {
           </button>
         </div>
 
-        {/* Game mode components */}
-        <div className="mt-8">
-          {gameMode === "practice" ? (
-            <PracticeMode />
-          ) : (
-            <Matchmaking />
-          )}
-        </div>
+        {/* Wrap game mode components with DeckProvider */}
+        <DeckProvider>
+          <div className="mt-8">
+            {gameMode === "practice" ? (
+              <PracticeMode />
+            ) : (
+              <MultiplayerMode />
+            )}
+          </div>
+        </DeckProvider>
       </div>
     </div>
   );

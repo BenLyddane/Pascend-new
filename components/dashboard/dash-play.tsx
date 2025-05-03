@@ -30,24 +30,38 @@ async function getPlayerGameStats(): Promise<GameStats | null> {
 
   if (!user) return null;
 
-  const { data: profile, error } = await supabase
-    .from("player_profiles")
-    .select("total_matches, current_streak, rank_points, wins, losses, rank_tier")
+  // Get ranked stats from ranked_stats table
+  const { data: rankedStats, error: rankedError } = await supabase
+    .from("ranked_stats")
+    .select("total_matches, current_streak, rank_points, rank_tier, wins, losses")
     .eq("user_id", user.id)
     .single();
 
-  if (error) {
-    console.error("Error fetching game stats:", error);
-    return null;
+  if (rankedError && rankedError.code !== 'PGRST116') {
+    console.error("Error fetching ranked stats:", rankedError);
+  }
+
+  // If no ranked stats found or error, return default stats
+  // We don't try to create stats from the client side due to RLS policies
+  if (!rankedStats || rankedError) {
+    console.log("Using default rank stats");
+    return {
+      totalMatches: 0,
+      currentStreak: 0,
+      rankPoints: 1000,
+      wins: 0,
+      losses: 0,
+      rankTier: 'Bronze',
+    };
   }
 
   return {
-    totalMatches: profile?.total_matches || 0,
-    currentStreak: profile?.current_streak || 0,
-    rankPoints: profile?.rank_points || 0,
-    wins: profile?.wins || 0,
-    losses: profile?.losses || 0,
-    rankTier: profile?.rank_tier || 'Unranked',
+    totalMatches: rankedStats?.total_matches || 0,
+    currentStreak: rankedStats?.current_streak || 0,
+    rankPoints: rankedStats?.rank_points || 1000,
+    wins: rankedStats?.wins || 0,
+    losses: rankedStats?.losses || 0,
+    rankTier: rankedStats?.rank_tier || 'Bronze',
   };
 }
 
@@ -137,13 +151,13 @@ function DashPlayContent() {
       {/* Play Buttons */}
       <div className="space-y-2">
         <GameModeButton
-          href="/protected/play"
+          href="/protected/play/multiplayer"
           icon={GamepadIcon}
           title="Play Now"
           description="Start a new game"
         />
         <GameModeButton
-          href="/protected/play?mode=practice"
+          href="/protected/play/practice"
           icon={SwordIcon}
           title="Practice Mode"
           description="Play against AI"

@@ -16,6 +16,7 @@ interface MatchStats {
   turnsPlayed: number;
   player1DeckId?: string;
   player2DeckId?: string;
+  mode?: 'practice' | 'ranked';
 }
 
 // Define types for player statistics
@@ -37,17 +38,19 @@ interface PlayerStats {
   last_match_at: string;
   updated_at: string;
   created_at?: string;
+  mode?: string;
 }
 
 /**
  * Saves match statistics to the database after a game is completed
  * This includes:
  * 1. Recording the match in match_history
- * 2. Updating player_stats with cumulative statistics
- * 3. Updating player_decks with win/loss records
+ * 2. Updating player_stats with cumulative statistics for practice mode
+ * 3. Updating ranked_stats for ranked mode
+ * 4. Updating player_decks with win/loss records
  */
 export async function updateMatchStats(
-  gameState: GameState,
+  gameState: GameState & { mode?: string },
   userId?: string | null
 ) {
   try {
@@ -68,13 +71,17 @@ export async function updateMatchStats(
     // Extract match statistics from game state
     const matchStats = calculateMatchStats(gameState, userId);
     
+    // Determine the match type (practice or ranked)
+    const matchType = (gameState as any).mode || 'practice';
+    matchStats.mode = matchType as 'practice' | 'ranked';
+    
     // 1. Save match history
     const { error: matchHistoryError } = await supabase
       .from('match_history')
       .insert({
         user_id: userId,
-        opponent_id: null, // For practice mode, there's no real opponent
-        match_type: 'practice',
+        opponent_id: (gameState as any).opponentId || null,
+        match_type: matchType,
         result: matchStats.result,
         damage_dealt: matchStats.damageDealt,
         damage_received: matchStats.damageReceived,
@@ -90,30 +97,13 @@ export async function updateMatchStats(
       return { success: false, error: matchHistoryError.message };
     }
     
-    // 2. Update player stats
-    // First, get current stats
-    const { data: currentStats, error: statsError } = await supabase
-      .from('player_stats')
-      .select('*')
-      .eq('user_id', userId)
-      .single();
-    
-    if (statsError && statsError.code !== 'PGRST116') { // PGRST116 means no rows found
-      console.error("Error fetching player stats:", statsError);
-      return { success: false, error: statsError.message };
-    }
-    
-    // Calculate new stats
-    const newStats = calculateNewPlayerStats(currentStats || { user_id: userId }, matchStats);
-    
-    // Update or insert player stats
-    const { error: updateStatsError } = await supabase
-      .from('player_stats')
-      .upsert(newStats);
-    
-    if (updateStatsError) {
-      console.error("Error updating player stats:", updateStatsError);
-      return { success: false, error: updateStatsError.message };
+    // 2. Update stats based on match type
+    if (matchType === 'practice') {
+      // Update practice stats in player_stats table
+      await updatePracticeStats(supabase, userId, matchStats);
+    } else {
+      // Update ranked stats in ranked_stats table
+      await updateRankedStats(supabase, userId, matchStats);
     }
     
     // 3. Update deck stats if deck IDs are available
@@ -132,6 +122,140 @@ export async function updateMatchStats(
       success: false, 
       error: error instanceof Error ? error.message : "Unknown error" 
     };
+  }
+}
+
+/**
+ * Updates practice mode statistics
+ */
+async function updatePracticeStats(supabase: SupabaseClient, userId: string, matchStats: MatchStats) {
+  // First, get current stats
+  const { data: currentStats, error: statsError } = await supabase
+    .from('player_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  if (statsError && statsError.code !== 'PGRST116') { // PGRST116 means no rows found
+    console.error("Error fetching player stats:", statsError);
+    throw new Error(statsError.message);
+  }
+  
+  const now = new Date().toISOString();
+  
+  // Initialize with defaults if no current stats
+  const stats: any = {
+    user_id: userId,
+    total_matches: (currentStats?.total_matches || 0) + 1,
+    total_damage_dealt: (currentStats?.total_damage_dealt || 0) + matchStats.damageDealt,
+    total_damage_received: (currentStats?.total_damage_received || 0) + matchStats.damageReceived,
+    total_cards_defeated: (currentStats?.total_cards_defeated || 0) + matchStats.cardsDefeated,
+    total_turns_played: (currentStats?.total_turns_played || 0) + matchStats.turnsPlayed,
+    total_special_abilities_used: (currentStats?.total_special_abilities_used || 0) + matchStats.specialAbilitiesUsed,
+    last_match_at: now,
+    updated_at: now,
+    mode: 'practice'
+  };
+  
+  // Update win/loss/draw counts and streaks
+  if (matchStats.result === 'win') {
+    stats.wins = (currentStats?.wins || 0) + 1;
+    stats.current_streak = (currentStats?.current_streak || 0) + 1;
+    stats.longest_streak = Math.max(currentStats?.longest_streak || 0, stats.current_streak);
+  } else if (matchStats.result === 'loss') {
+    stats.losses = (currentStats?.losses || 0) + 1;
+    stats.current_streak = 0;
+  } else { // draw
+    stats.draws = (currentStats?.draws || 0) + 1;
+    // No change to streak for draws
+  }
+  
+  // If this is the first record, set created_at
+  if (!currentStats?.created_at) {
+    stats.created_at = now;
+  }
+  
+  // Update or insert player stats
+  const { error: updateStatsError } = await supabase
+    .from('player_stats')
+    .upsert(stats);
+  
+  if (updateStatsError) {
+    console.error("Error updating player stats:", updateStatsError);
+    throw new Error(updateStatsError.message);
+  }
+}
+
+/**
+ * Updates ranked mode statistics
+ */
+async function updateRankedStats(supabase: SupabaseClient, userId: string, matchStats: MatchStats) {
+  // First, get current ranked stats
+  const { data: currentStats, error: statsError } = await supabase
+    .from('ranked_stats')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+  
+  if (statsError && statsError.code !== 'PGRST116') { // PGRST116 means no rows found
+    console.error("Error fetching ranked stats:", statsError);
+    throw new Error(statsError.message);
+  }
+  
+  const now = new Date().toISOString();
+  
+  // Calculate rank change based on current rank tier
+  const currentRankTier = currentStats?.rank_tier || 'Bronze';
+  const rankChange = calculateRankChange(matchStats.result, currentRankTier);
+  const currentRankPoints = currentStats?.rank_points || 1000;
+  const newRankPoints = Math.max(0, currentRankPoints + rankChange);
+  const newRankTier = calculateRankTier(newRankPoints);
+  
+  // Initialize with defaults if no current stats
+  const stats: any = {
+    user_id: userId,
+    total_matches: (currentStats?.total_matches || 0) + 1,
+    rank_points: newRankPoints,
+    rank_tier: newRankTier,
+    last_match_at: now,
+    updated_at: now
+  };
+  
+  // Update win/loss/draw counts and streaks
+  if (matchStats.result === 'win') {
+    stats.wins = (currentStats?.wins || 0) + 1;
+    stats.current_streak = (currentStats?.current_streak || 0) + 1;
+    stats.longest_streak = Math.max(currentStats?.longest_streak || 0, stats.current_streak);
+  } else if (matchStats.result === 'loss') {
+    stats.losses = (currentStats?.losses || 0) + 1;
+    stats.current_streak = 0;
+  } else { // draw
+    stats.draws = (currentStats?.draws || 0) + 1;
+    // No change to streak for draws
+  }
+  
+  // Update highest rank if needed
+  if (newRankPoints > (currentStats?.highest_rank_points || 0)) {
+    stats.highest_rank_points = newRankPoints;
+    stats.highest_rank_tier = newRankTier;
+  }
+  
+  // If this is the first record, set created_at and defaults
+  if (!currentStats) {
+    stats.created_at = now;
+    stats.season_id = 'season_1';
+    stats.highest_rank_points = newRankPoints;
+    stats.highest_rank_tier = newRankTier;
+  }
+  
+  // Update or insert ranked stats
+  const { error: updateStatsError } = await supabase
+    .from('ranked_stats')
+    .upsert(stats);
+  
+  if (updateStatsError) {
+    console.error("Error updating ranked stats:", updateStatsError);
+    throw new Error(updateStatsError.message);
   }
 }
 
@@ -191,9 +315,9 @@ function calculateMatchStats(gameState: GameState, userId: string): MatchStats {
   });
   
   // Extract deck IDs if available in the game state
-  // Note: This assumes the game state has these properties, which may need to be added
   const player1DeckId = (gameState as any).player1DeckId;
   const player2DeckId = (gameState as any).player2DeckId;
+  const mode = (gameState as any).mode || 'practice';
   
   return {
     result,
@@ -203,60 +327,9 @@ function calculateMatchStats(gameState: GameState, userId: string): MatchStats {
     specialAbilitiesUsed,
     turnsPlayed: gameState.currentTurn,
     player1DeckId,
-    player2DeckId
+    player2DeckId,
+    mode: mode as 'practice' | 'ranked'
   };
-}
-
-/**
- * Calculates new player stats based on current stats and match results
- */
-function calculateNewPlayerStats(currentStats: any, matchStats: MatchStats): PlayerStats {
-  const now = new Date().toISOString();
-  
-  // Initialize with defaults if no current stats
-  const stats: PlayerStats = {
-    user_id: currentStats.user_id,
-    total_matches: (currentStats.total_matches || 0) + 1,
-    total_damage_dealt: (currentStats.total_damage_dealt || 0) + matchStats.damageDealt,
-    total_damage_received: (currentStats.total_damage_received || 0) + matchStats.damageReceived,
-    total_cards_defeated: (currentStats.total_cards_defeated || 0) + matchStats.cardsDefeated,
-    total_turns_played: (currentStats.total_turns_played || 0) + matchStats.turnsPlayed,
-    total_special_abilities_used: (currentStats.total_special_abilities_used || 0) + matchStats.specialAbilitiesUsed,
-    last_match_at: now,
-    updated_at: now
-  };
-  
-  // Update win/loss/draw counts and streaks
-  if (matchStats.result === 'win') {
-    stats.wins = (currentStats.wins || 0) + 1;
-    stats.current_streak = (currentStats.current_streak || 0) + 1;
-    stats.longest_streak = Math.max(currentStats.longest_streak || 0, stats.current_streak || 0);
-    
-    // Update rank points (simple implementation - can be made more complex)
-    stats.rank_points = (currentStats.rank_points || 0) + 10;
-  } else if (matchStats.result === 'loss') {
-    stats.losses = (currentStats.losses || 0) + 1;
-    stats.current_streak = 0;
-    
-    // Decrease rank points, but don't go below 0
-    stats.rank_points = Math.max(0, (currentStats.rank_points || 0) - 5);
-  } else { // draw
-    stats.draws = (currentStats.draws || 0) + 1;
-    // No change to streak for draws
-    
-    // Small increase in rank points for draws
-    stats.rank_points = (currentStats.rank_points || 0) + 2;
-  }
-  
-  // Set rank tier based on rank points
-  stats.rank_tier = calculateRankTier(stats.rank_points || 0);
-  
-  // If this is the first record, set created_at
-  if (!currentStats.created_at) {
-    stats.created_at = now;
-  }
-  
-  return stats;
 }
 
 /**
@@ -296,16 +369,75 @@ async function updateDeckStats(supabase: SupabaseClient, deckId: string, isWin: 
 }
 
 /**
+ * Calculates rank change for ranked mode based on current rank tier
+ * Higher ranks get fewer points for wins and lose more points for losses
+ */
+function calculateRankChange(result: string, rankTier: string = 'Bronze'): number {
+  // Base points for each result
+  let winPoints = 25;
+  let lossPoints = -15;
+  let drawPoints = 5;
+  
+  // Adjust points based on rank tier
+  switch (rankTier.toLowerCase()) {
+    case 'bronze':
+      // Default values for Bronze
+      break;
+    case 'silver':
+      winPoints = 20;
+      lossPoints = -18;
+      break;
+    case 'gold':
+      winPoints = 18;
+      lossPoints = -20;
+      break;
+    case 'platinum':
+      winPoints = 15;
+      lossPoints = -22;
+      break;
+    case 'diamond':
+      winPoints = 12;
+      lossPoints = -25;
+      break;
+    case 'master':
+      winPoints = 10;
+      lossPoints = -30;
+      break;
+    default:
+      // Use default values for unknown ranks
+      break;
+  }
+  
+  // Return points based on match result
+  switch (result) {
+    case "win":
+      return winPoints;
+    case "loss":
+      return lossPoints;
+    case "draw":
+      return drawPoints;
+    default:
+      return 0;
+  }
+}
+
+/**
  * Calculates rank tier based on rank points
  */
-function calculateRankTier(rankPoints: number | undefined): string {
-  if (rankPoints === undefined) return 'Bronze';
-  if (rankPoints < 100) return 'Bronze';
-  if (rankPoints < 300) return 'Silver';
-  if (rankPoints < 600) return 'Gold';
-  if (rankPoints < 1000) return 'Platinum';
-  if (rankPoints < 1500) return 'Diamond';
-  return 'Mythic';
+function calculateRankTier(rankPoints: number): string {
+  if (rankPoints < 1000) {
+    return 'Bronze';
+  } else if (rankPoints < 1500) {
+    return 'Silver';
+  } else if (rankPoints < 2000) {
+    return 'Gold';
+  } else if (rankPoints < 2500) {
+    return 'Platinum';
+  } else if (rankPoints < 3000) {
+    return 'Diamond';
+  } else {
+    return 'Master';
+  }
 }
 
 // For backward compatibility with existing code

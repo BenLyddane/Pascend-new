@@ -84,7 +84,9 @@ function processCardEffects(
           cardId: card.id,
           cardName: card.name,
           effectName: effect.name,
-          effectDescription: effect.description.replace('{modifier}', effect.value.toString()),
+          effectDescription: effect.description
+            .replace(/{modifier}/g, effect.value.toString())
+            .replace(/{value}/g, effect.value.toString()),
           effectValue: effect.value,
           effectType: effect.effect_type
         }
@@ -248,7 +250,9 @@ function applyEffect(effect: any, context: EffectContext): void {
       cardId: sourceCard.id,
       cardName: sourceCard.name,
       effectName: effect.name,
-      effectDescription: effect.description.replace('{modifier}', effect.value.toString()),
+      effectDescription: effect.description
+        .replace(/{modifier}/g, effect.value.toString())
+        .replace(/{value}/g, effect.value.toString()),
       effectValue: effect.value,
       effectType: effect.effect_type,
       sourcePlayer: isPlayer1Turn ? 1 : 2,

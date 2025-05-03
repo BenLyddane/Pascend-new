@@ -197,7 +197,9 @@ function calculateDamage(attacker: GameCard, defender: GameCard): number {
   // Apply special effects from the attacker
   attacker.special_effects.forEach(effect => {
     if (effect.effect_type === 'damage' || effect.effect_type === 'buff') {
+      // Use the actual effect value
       damage += effect.value;
+      console.log(`Applied ${effect.name} effect: +${effect.value} damage (${effect.effect_type})`);
     }
   });
   
@@ -205,20 +207,25 @@ function calculateDamage(attacker: GameCard, defender: GameCard): number {
   attacker.gameplay_effects.forEach(effect => {
     if (effect.effect_type === 'damage_boost' || effect.effect_type === 'buff') {
       damage += effect.value;
+      console.log(`Applied gameplay effect: +${effect.value} damage (${effect.effect_type})`);
     }
   });
   
   // Apply any defense effects from the defender's special effects
   defender.special_effects.forEach(effect => {
     if (effect.effect_type === 'shield' || effect.effect_type === 'defense') {
-      damage = Math.max(1, damage - effect.value); // Minimum 1 damage
+      const reduction = effect.value;
+      damage = Math.max(1, damage - reduction); // Minimum 1 damage
+      console.log(`Applied ${effect.name} defense: -${reduction} damage (${effect.effect_type})`);
     }
   });
   
   // Apply any defense effects from the defender's gameplay effects
   defender.gameplay_effects.forEach(effect => {
     if (effect.effect_type === 'damage_reduction' || effect.effect_type === 'shield') {
-      damage = Math.max(1, damage - effect.value); // Minimum 1 damage
+      const reduction = effect.value;
+      damage = Math.max(1, damage - reduction); // Minimum 1 damage
+      console.log(`Applied gameplay defense: -${reduction} damage (${effect.effect_type})`);
     }
   });
   

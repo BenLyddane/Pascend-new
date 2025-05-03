@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import { DeckWithCards } from "@/app/actions/fetchDecks";
-import { useDeckContext } from "../context/DeckContext";
+import { fetchDecks } from "@/app/actions/deckActions";
 import {
   Card,
   CardContent,
@@ -15,32 +15,66 @@ import { GameCardPractice } from "@/components/game-card-practice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Search, X, AlertCircle } from "lucide-react";
+import { Search, X, AlertCircle, RefreshCw } from "lucide-react";
 import {
   HoverCard,
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card";
 
-interface DeckSelectorProps {
+interface SimpleDeckSelectorProps {
   label: string;
   selectedDeck: DeckWithCards | null;
   onDeckSelect: (deck: DeckWithCards) => void;
 }
 
-export default function DeckSelector({
+export default function SimpleDeckSelector({
   label,
   selectedDeck,
   onDeckSelect,
-}: DeckSelectorProps) {
-  // Use the shared deck context
-  const { decks, loading, error, refreshDecks } = useDeckContext();
-  
+}: SimpleDeckSelectorProps) {
+  const [decks, setDecks] = useState<DeckWithCards[]>([]);
   const [filteredDecks, setFilteredDecks] = useState<DeckWithCards[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showDeckList, setShowDeckList] = useState(!selectedDeck);
+  const [key, setKey] = useState(Date.now()); // Force re-render key
 
-  // Update filtered decks when decks or search query changes
+  // Load decks using the server action
+  const loadDecks = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Use the server action to fetch decks
+      const validDecks = await fetchDecks();
+      console.log(`SimpleDeckSelector: Loaded ${validDecks.length} decks`);
+      
+      setDecks(validDecks);
+      setFilteredDecks(validDecks);
+    } catch (err) {
+      console.error("Error loading decks:", err);
+      setError("Failed to load decks");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load decks when component mounts or route changes
+  useEffect(() => {
+    console.log("SimpleDeckSelector: Loading decks on mount or route change");
+    loadDecks();
+    
+    // Force a re-render after a short delay to ensure UI updates
+    const timer = setTimeout(() => {
+      setKey(Date.now());
+    }, 100);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Filter decks based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
       setFilteredDecks(decks);
@@ -69,11 +103,27 @@ export default function DeckSelector({
     setShowDeckList(false);
   };
 
+  const handleRefresh = () => {
+    loadDecks();
+    setKey(Date.now()); // Force re-render
+  };
+
   if (loading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{label}</CardTitle>
+          <CardTitle className="flex justify-between items-center">
+            <span>{label}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={loading}
+            >
+              <RefreshCw className="mr-1 animate-spin" size={16} />
+              Loading...
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -90,7 +140,17 @@ export default function DeckSelector({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{label}</CardTitle>
+          <CardTitle className="flex justify-between items-center">
+            <span>{label}</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleRefresh}
+            >
+              <RefreshCw className="mr-1" size={16} />
+              Retry
+            </Button>
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="p-4 bg-red-100 text-red-700 rounded-md flex items-center gap-2">
@@ -104,7 +164,7 @@ export default function DeckSelector({
 
   if (selectedDeck && !showDeckList) {
     return (
-      <Card>
+      <Card key={`selected-${key}`}>
         <CardHeader>
           <CardTitle className="flex justify-between items-center">
             <span>
@@ -132,7 +192,7 @@ export default function DeckSelector({
   const displayDecks = filteredDecks.length > 0 ? filteredDecks : decks;
   
   return (
-    <Card>
+    <Card key={`list-${key}`}>
       <CardHeader>
         <CardTitle className="flex justify-between items-center">
           <span>{label}</span>
@@ -140,24 +200,10 @@ export default function DeckSelector({
             <Button
               variant="ghost"
               size="sm"
-              onClick={refreshDecks}
+              onClick={handleRefresh}
               disabled={loading}
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`mr-1 ${loading ? "animate-spin" : ""}`}
-              >
-                <path d="M21 12a9 9 0 0 1-9 9c-4.97 0-9-4.03-9-9s4.03-9 9-9h3"></path>
-                <path d="M21 3v6h-6"></path>
-              </svg>
+              <RefreshCw className={`mr-1 ${loading ? "animate-spin" : ""}`} size={16} />
               Refresh
             </Button>
             {selectedDeck && (

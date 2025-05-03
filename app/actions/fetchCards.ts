@@ -59,9 +59,21 @@ export function mergeSpecialEffects(card: Card): CardWithEffects {
 
   const { special_effects: _, ...cardWithoutEffects } = card;
   
+  // Create a map to track unique effects by name to avoid duplicates
+  const uniqueEffects = new Map();
+  
+  // Process all effects and keep only unique ones
+  [...dbEffects, ...jsonEffects].forEach(effect => {
+    const key = `${effect.name}-${effect.effect_type}`;
+    // Only keep the first occurrence of each effect
+    if (!uniqueEffects.has(key)) {
+      uniqueEffects.set(key, effect);
+    }
+  });
+  
   return {
     ...cardWithoutEffects,
-    special_effects: dbEffects  // Only use effects from card_properties
+    special_effects: Array.from(uniqueEffects.values())
   };
 }
 

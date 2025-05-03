@@ -1,164 +1,88 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { createClient } from "@/utils/supabase/client";
-import { Loader2Icon } from "lucide-react";
-
-interface QueuePlayer {
-  id: string;
-  displayName: string;
-  joinedAt: string;
-  rankPoints: number;
-}
-
-interface QueueResponse {
-  id: string;
-  user_id: string;
-  joined_at: string;
-  rank_points: number;
-  player_profiles: {
-    rank_points: number | null;
-  } | null;
-  auth_user: {
-    raw_user_meta_data: {
-      name?: string;
-      full_name?: string;
-      user_name?: string;
-    };
-  } | null;
-}
+import { useEffect, useState } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export function MatchmakingQueue() {
-  const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
+  const [dots, setDots] = useState("");
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [searchTime, setSearchTime] = useState(0);
-  const supabase = createClient();
 
-  // Fetch current queue players
-  useEffect(() => {
-    const fetchQueuePlayers = async () => {
-      const { data: players, error } = (await supabase
-        .from("matchmaking_queue")
-        .select(
-          `
-          id,
-          user_id,
-          joined_at,
-          rank_points,
-          player_profiles!matchmaking_queue_user_id_fkey (
-            rank_points
-          ),
-          auth_user:user_id (
-            raw_user_meta_data
-          )
-        `
-        )
-        .eq("status", "waiting")) as {
-        data: QueueResponse[] | null;
-        error: any;
-      };
-
-      if (error) {
-        console.error("Error fetching queue players:", error);
-        return;
-      }
-
-      if (players) {
-        setQueuePlayers(
-          players.map((p) => ({
-            id: p.id,
-            displayName:
-              p.auth_user?.raw_user_meta_data?.name ||
-              p.auth_user?.raw_user_meta_data?.full_name ||
-              p.auth_user?.raw_user_meta_data?.user_name ||
-              "Unknown Player",
-            joinedAt: p.joined_at,
-            rankPoints: p.player_profiles?.rank_points || p.rank_points || 1000,
-          }))
-        );
-      }
-    };
-
-    // Initial fetch
-    fetchQueuePlayers();
-
-    // Subscribe to queue changes
-    const channel = supabase
-      .channel("matchmaking_queue_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "matchmaking_queue",
-        },
-        () => {
-          fetchQueuePlayers();
-        }
-      )
-      .subscribe();
-
-    // Refresh every 10 seconds as backup
-    const interval = setInterval(fetchQueuePlayers, 10000);
-
-    return () => {
-      channel.unsubscribe();
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Update search time
+  // Animate the loading dots
   useEffect(() => {
     const interval = setInterval(() => {
-      setSearchTime((prev) => prev + 1);
-    }, 1000);
+      setDots(prev => {
+        if (prev.length >= 3) return "";
+        return prev + ".";
+      });
+    }, 500);
+
     return () => clearInterval(interval);
   }, []);
 
-  const formatWaitTime = (joinedAt: string) => {
-    const waitTimeSeconds = Math.floor(
-      (Date.now() - new Date(joinedAt).getTime()) / 1000
-    );
-    if (waitTimeSeconds < 60) return `${waitTimeSeconds}s`;
-    return `${Math.floor(waitTimeSeconds / 60)}m ${waitTimeSeconds % 60}s`;
+  // Simulate queue position and search time
+  useEffect(() => {
+    // Start with a random position between 1 and 10
+    setQueuePosition(Math.floor(Math.random() * 10) + 1);
+
+    // Decrease queue position over time
+    const positionInterval = setInterval(() => {
+      setQueuePosition(prev => {
+        if (prev === null || prev <= 1) return 1;
+        return prev - 1;
+      });
+    }, 3000);
+
+    // Increase search time
+    const timeInterval = setInterval(() => {
+      setSearchTime(prev => prev + 1);
+    }, 1000);
+
+    return () => {
+      clearInterval(positionInterval);
+      clearInterval(timeInterval);
+    };
+  }, []);
+
+  // Format search time as MM:SS
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   return (
-    <div className="w-full max-w-sm mx-auto space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">
-          Players in Queue ({queuePlayers.length})
-        </h3>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2Icon className="animate-spin h-4 w-4" />
-          <span>Searching: {searchTime}s</span>
+    <div className="flex flex-col items-center justify-center p-8 bg-accent/20 rounded-lg">
+      <div className="text-xl font-semibold mb-4">
+        Searching for opponent{dots}
+      </div>
+      
+      <div className="w-full max-w-md bg-background rounded-full h-4 mb-4 overflow-hidden">
+        <div 
+          className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+          style={{ width: `${Math.min(100, searchTime * 2)}%` }}
+        ></div>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-8 w-full max-w-md">
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground">Queue Position</div>
+          {queuePosition === null ? (
+            <Skeleton className="h-8 w-16 mx-auto" />
+          ) : (
+            <div className="text-2xl font-bold">{queuePosition}</div>
+          )}
+        </div>
+        
+        <div className="text-center">
+          <div className="text-sm text-muted-foreground">Search Time</div>
+          <div className="text-2xl font-bold">{formatTime(searchTime)}</div>
         </div>
       </div>
-
-      {queuePlayers.length > 0 ? (
-        <div className="bg-accent/50 rounded-lg divide-y divide-accent">
-          {queuePlayers.map((player) => (
-            <div
-              key={player.id}
-              className="flex items-center justify-between p-3"
-            >
-              <div>
-                <span className="font-medium">{player.displayName}</span>
-                <span className="text-xs text-muted-foreground ml-2">
-                  ({player.rankPoints} RP)
-                </span>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Waiting: {formatWaitTime(player.joinedAt)}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-8 text-muted-foreground">
-          <p>No other players in queue</p>
-          <p className="text-sm">You'll be matched as soon as someone joins</p>
-        </div>
-      )}
+      
+      <div className="mt-6 text-sm text-muted-foreground text-center">
+        Matching you with players of similar skill level...
+      </div>
     </div>
   );
 }
