@@ -57,17 +57,37 @@ export async function createQueueEntry(deckId: string) {
   const supabase = await createClient()
 
   try {
-    // Get the user's rank points from their profile
+    // Get the user's rank points from their player_stats
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) throw new Error('User not authenticated')
 
-    const { data: profile, error: profileError } = await supabase
-      .from('player_profiles')
+    // Get rank points from player_stats
+    const { data: playerStats, error: statsError } = await supabase
+      .from('player_stats')
       .select('rank_points')
       .eq('user_id', user.id)
       .single()
 
-    if (profileError) throw profileError
+    // If no stats found or error, create default stats with 500 points
+    if (statsError && statsError.code === 'PGRST116') {
+      // Create default stats for new user
+      const { error: createError } = await supabase
+        .from('player_stats')
+        .insert({
+          user_id: user.id,
+          rank_points: 500,
+          rank_tier: 'bronze',
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          total_matches: 0,
+          current_streak: 0
+        })
+      
+      if (createError) throw createError
+    } else if (statsError) {
+      throw statsError
+    }
 
     // Create the queue entry
     const { data: entry, error: queueError } = await supabase
@@ -76,7 +96,7 @@ export async function createQueueEntry(deckId: string) {
         user_id: user.id,
         deck_id: deckId,
         status: 'waiting' as MatchmakingStatus,
-        rank_points: profile?.rank_points || 1000,
+        rank_points: playerStats?.rank_points || 500,
         joined_at: new Date().toISOString()
       })
       .select()

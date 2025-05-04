@@ -186,23 +186,21 @@ function CollectionContent() {
     <CardContent>
       {/* Collection Stats */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50 hover:bg-accent/70 transition-colors">
           <span className="text-sm text-muted-foreground">Collection</span>
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-center gap-1">
             <span className="text-2xl font-bold">{stats?.unique_cards || 0}</span>
-            <span className="text-sm text-muted-foreground">
-              / {stats?.total_cards || 0}
-            </span>
+            <LayersIcon size={16} className="text-blue-500 ml-1" />
           </div>
         </div>
-        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50 hover:bg-accent/70 transition-colors">
           <span className="text-sm text-muted-foreground">Legendary</span>
           <div className="flex items-center gap-1">
             <span className="text-2xl font-bold">{stats?.legendary_count || 0}</span>
             <StarIcon size={16} className="text-amber-500" />
           </div>
         </div>
-        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
+        <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50 hover:bg-accent/70 transition-colors">
           <span className="text-sm text-muted-foreground">Epic</span>
           <div className="flex items-center gap-1">
             <span className="text-2xl font-bold">{stats?.epic_count || 0}</span>
@@ -226,7 +224,7 @@ function CollectionContent() {
         <Carousel className="w-full">
           <CarouselContent>
             {filteredCards.map((card) => (
-              <CarouselItem key={card.id} className="basis-1/3">
+              <CarouselItem key={card.id} className="basis-1/3 md:basis-1/4 lg:basis-1/5">
                 <CardPreview 
                   card={card} 
                   onClick={() => setSelectedCard(card)}
@@ -234,15 +232,20 @@ function CollectionContent() {
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious />
-          <CarouselNext />
+          <CarouselPrevious className="left-1" />
+          <CarouselNext className="right-1" />
         </Carousel>
       ) : (
         <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-          <LayersIcon size={48} className="mb-2" />
-          <span className="text-sm">
+          <LayersIcon size={48} className="mb-2 opacity-50" />
+          <span className="text-sm font-medium">
             {searchTerm ? "No cards found" : "No cards yet"}
           </span>
+          {searchTerm ? (
+            <span className="text-xs mt-1">Try a different search term</span>
+          ) : (
+            <span className="text-xs mt-1">Create cards to build your collection</span>
+          )}
         </div>
       )}
 

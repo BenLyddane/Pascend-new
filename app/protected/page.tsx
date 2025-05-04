@@ -4,6 +4,7 @@ import { DashCollection } from "@/components/dashboard/dash-collection";
 import { DashPlay } from "@/components/dashboard/dash-play";
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -28,6 +29,15 @@ export default async function ProtectedPage() {
     redirect('/sign-in');
   }
   
+  // Get user profile for display name
+  const { data: profile } = await supabase
+    .from('player_profiles')
+    .select('display_name')
+    .eq('user_id', user.id)
+    .single();
+  
+  const displayName = profile?.display_name || user.email?.split("@")[0] || 'Player';
+  
   // Get the time of day for greeting
   const hour = new Date().getHours();
   let greeting = "Good evening";
@@ -40,11 +50,19 @@ export default async function ProtectedPage() {
       <div className="flex items-baseline justify-between border-b pb-4">
         <div className="space-y-1">
           <h2 className="text-2xl font-semibold tracking-tight">
-            {greeting}, {user.email?.split("@")[0]}
+            {greeting}, {displayName}
           </h2>
           <p className="text-sm text-muted-foreground">
             Here's what's happening with your card collection today.
           </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link 
+            href="/protected/play/multiplayer" 
+            className="bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 text-white px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all hover:shadow-lg"
+          >
+            Quick Match
+          </Link>
         </div>
       </div>
 

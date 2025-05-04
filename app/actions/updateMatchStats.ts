@@ -190,15 +190,15 @@ async function updatePracticeStats(supabase: SupabaseClient, userId: string, mat
  * Updates ranked mode statistics
  */
 async function updateRankedStats(supabase: SupabaseClient, userId: string, matchStats: MatchStats) {
-  // First, get current ranked stats
+  // First, get current player stats
   const { data: currentStats, error: statsError } = await supabase
-    .from('ranked_stats')
+    .from('player_stats')
     .select('*')
     .eq('user_id', userId)
     .single();
   
   if (statsError && statsError.code !== 'PGRST116') { // PGRST116 means no rows found
-    console.error("Error fetching ranked stats:", statsError);
+    console.error("Error fetching player stats:", statsError);
     throw new Error(statsError.message);
   }
   
@@ -207,7 +207,7 @@ async function updateRankedStats(supabase: SupabaseClient, userId: string, match
   // Calculate rank change based on current rank tier
   const currentRankTier = currentStats?.rank_tier || 'Bronze';
   const rankChange = calculateRankChange(matchStats.result, currentRankTier);
-  const currentRankPoints = currentStats?.rank_points || 1000;
+  const currentRankPoints = currentStats?.rank_points || 500; // Default to 500 for new users
   const newRankPoints = Math.max(0, currentRankPoints + rankChange);
   const newRankTier = calculateRankTier(newRankPoints);
   
@@ -215,6 +215,11 @@ async function updateRankedStats(supabase: SupabaseClient, userId: string, match
   const stats: any = {
     user_id: userId,
     total_matches: (currentStats?.total_matches || 0) + 1,
+    total_damage_dealt: (currentStats?.total_damage_dealt || 0) + matchStats.damageDealt,
+    total_damage_received: (currentStats?.total_damage_received || 0) + matchStats.damageReceived,
+    total_cards_defeated: (currentStats?.total_cards_defeated || 0) + matchStats.cardsDefeated,
+    total_turns_played: (currentStats?.total_turns_played || 0) + matchStats.turnsPlayed,
+    total_special_abilities_used: (currentStats?.total_special_abilities_used || 0) + matchStats.specialAbilitiesUsed,
     rank_points: newRankPoints,
     rank_tier: newRankTier,
     last_match_at: now,
@@ -234,27 +239,18 @@ async function updateRankedStats(supabase: SupabaseClient, userId: string, match
     // No change to streak for draws
   }
   
-  // Update highest rank if needed
-  if (newRankPoints > (currentStats?.highest_rank_points || 0)) {
-    stats.highest_rank_points = newRankPoints;
-    stats.highest_rank_tier = newRankTier;
-  }
-  
-  // If this is the first record, set created_at and defaults
+  // If this is the first record, set created_at
   if (!currentStats) {
     stats.created_at = now;
-    stats.season_id = 'season_1';
-    stats.highest_rank_points = newRankPoints;
-    stats.highest_rank_tier = newRankTier;
   }
   
-  // Update or insert ranked stats
+  // Update or insert player stats
   const { error: updateStatsError } = await supabase
-    .from('ranked_stats')
+    .from('player_stats')
     .upsert(stats);
   
   if (updateStatsError) {
-    console.error("Error updating ranked stats:", updateStatsError);
+    console.error("Error updating player stats:", updateStatsError);
     throw new Error(updateStatsError.message);
   }
 }

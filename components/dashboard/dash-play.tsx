@@ -5,9 +5,9 @@ import { Button } from "@/components/ui/button";
 import {
   GamepadIcon,
   SwordIcon,
-  TrophyIcon,
   Loader2Icon,
 } from "lucide-react";
+import { RankBadge } from "@/components/rank-badge";
 import Link from "next/link";
 import { createClient } from "@/utils/supabase/client";
 import { useState, useEffect } from "react";
@@ -18,6 +18,7 @@ interface GameStats {
   rankPoints: number;
   wins: number;
   losses: number;
+  draws?: number;
   rankTier: string;
 }
 
@@ -30,38 +31,58 @@ async function getPlayerGameStats(): Promise<GameStats | null> {
 
   if (!user) return null;
 
-  // Get ranked stats from ranked_stats table
-  const { data: rankedStats, error: rankedError } = await supabase
-    .from("ranked_stats")
-    .select("total_matches, current_streak, rank_points, rank_tier, wins, losses")
+  // Try to get stats from player_stats table
+  const { data: playerStats, error: playerStatsError } = await supabase
+    .from("player_stats")
+    .select("total_matches, current_streak, rank_points, rank_tier, wins, losses, draws")
     .eq("user_id", user.id)
     .single();
 
-  if (rankedError && rankedError.code !== 'PGRST116') {
-    console.error("Error fetching ranked stats:", rankedError);
+  if (playerStatsError && playerStatsError.code !== 'PGRST116') {
+    console.error("Error fetching player stats:", playerStatsError);
   }
 
-  // If no ranked stats found or error, return default stats
-  // We don't try to create stats from the client side due to RLS policies
-  if (!rankedStats || rankedError) {
-    console.log("Using default rank stats");
+  // If no player stats found or error, create default stats
+  if (!playerStats || playerStatsError) {
+    console.log("Using default player stats");
+    
+    // Create default stats with 500 points for new users
+    const { error: createError } = await supabase
+      .from("player_stats")
+      .insert({
+        user_id: user.id,
+        rank_points: 500,
+        rank_tier: 'bronze',
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        total_matches: 0,
+        current_streak: 0
+      });
+      
+    if (createError) {
+      console.error("Error creating default player stats:", createError);
+    }
+    
     return {
       totalMatches: 0,
       currentStreak: 0,
-      rankPoints: 1000,
+      rankPoints: 500,
       wins: 0,
       losses: 0,
+      draws: 0,
       rankTier: 'Bronze',
     };
   }
 
   return {
-    totalMatches: rankedStats?.total_matches || 0,
-    currentStreak: rankedStats?.current_streak || 0,
-    rankPoints: rankedStats?.rank_points || 1000,
-    wins: rankedStats?.wins || 0,
-    losses: rankedStats?.losses || 0,
-    rankTier: rankedStats?.rank_tier || 'Bronze',
+    totalMatches: playerStats?.total_matches || 0,
+    currentStreak: playerStats?.current_streak || 0,
+    rankPoints: playerStats?.rank_points || 0,
+    wins: playerStats?.wins || 0,
+    losses: playerStats?.losses || 0,
+    draws: playerStats?.draws || 0,
+    rankTier: playerStats?.rank_tier || 'Bronze',
   };
 }
 
@@ -70,16 +91,18 @@ function GameModeButton({
   icon: Icon,
   title,
   description,
+  primary = false,
 }: {
   href: string;
   icon: React.ElementType;
   title: string;
   description?: string;
+  primary?: boolean;
 }) {
   return (
     <Button
-      variant={description ? "default" : "outline"}
-      className={`w-full flex items-center gap-2 ${description ? "h-16" : "h-24 flex-col"}`}
+      variant={primary ? "default" : "outline"}
+      className={`w-full flex items-center gap-2 ${description ? "h-16" : "h-24 flex-col"} ${primary ? "bg-gradient-to-r from-green-500 to-teal-500 hover:from-green-600 hover:to-teal-600 shadow-md" : ""}`}
       asChild
     >
       <Link href={href}>
@@ -89,7 +112,7 @@ function GameModeButton({
         >
           <span className="font-medium">{title}</span>
           {description && (
-            <span className="text-xs text-primary-foreground/80">
+            <span className={`text-xs ${primary ? "text-primary-foreground/90" : "text-muted-foreground"}`}>
               {description}
             </span>
           )}
@@ -126,17 +149,27 @@ function DashPlayContent() {
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
           <span className="text-sm text-muted-foreground">Win/Loss</span>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-green-500">{stats?.wins || 0}</span>
-            <span className="text-lg font-bold text-muted-foreground">/</span>
-            <span className="text-2xl font-bold text-red-500">{stats?.losses || 0}</span>
+          <div className="flex items-center gap-1 mt-1">
+            <span className="text-xl font-bold text-green-500">{stats?.wins || 0}</span>
+            <span className="text-lg font-medium text-muted-foreground">/</span>
+            <span className="text-xl font-bold text-red-500">{stats?.losses || 0}</span>
+            {stats?.draws && stats.draws > 0 && (
+              <>
+                <span className="text-lg font-medium text-muted-foreground">/</span>
+                <span className="text-xl font-bold text-blue-500">{stats.draws}</span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
           <span className="text-sm text-muted-foreground">Rank</span>
-          <div className="flex items-center gap-1">
-            <span className="text-xl font-bold">{stats?.rankTier || 'Unranked'}</span>
-            <TrophyIcon size={16} className="text-yellow-500" />
+          <div className="flex items-center justify-center mt-1">
+            <RankBadge 
+              tier={stats?.rankTier || 'Unranked'} 
+              points={stats?.rankPoints} 
+              size="md"
+              showPoints={false}
+            />
           </div>
         </div>
         <div className="flex flex-col items-center p-2 rounded-lg bg-accent/50">
@@ -153,14 +186,15 @@ function DashPlayContent() {
         <GameModeButton
           href="/protected/play/multiplayer"
           icon={GamepadIcon}
-          title="Play Now"
-          description="Start a new game"
+          title="Ranked Match"
+          description="Battle against other players"
+          primary={true}
         />
         <GameModeButton
           href="/protected/play/practice"
           icon={SwordIcon}
           title="Practice Mode"
-          description="Play against AI"
+          description="Play against your own decks!"
         />
       </div>
     </CardContent>
@@ -171,7 +205,7 @@ export function DashPlay() {
   return (
     <Card className="w-full">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Quick Play</CardTitle>
+        <CardTitle className="text-sm font-medium">Play</CardTitle>
         <Link
           href="/protected/play"
           className="text-sm text-muted-foreground hover:text-primary transition-colors"
