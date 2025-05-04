@@ -21,12 +21,15 @@ export type Card = Database["public"]["Tables"]["cards"]["Row"] & {
 import { CardWithEffects } from "./fetchDecks";
 
 export function mergeSpecialEffects(card: Card): CardWithEffects {
+  // Ensure we have a valid modifier value (default to 1 if null or undefined)
+  const cardModifier = card.modifier ?? 1;
+  
   const dbEffects = card.card_properties?.map(cp => ({
     name: cp.special_properties.name,
     description: cp.special_properties.description,
     effect_type: cp.special_properties.effect_type,
     effect_icon: cp.special_properties.effect_icon,
-    value: cp.value || cp.special_properties.value || 0
+    value: (cp.value || cp.special_properties.value || 0) * cardModifier
   })) || [];
 
   let jsonEffects: {
@@ -49,7 +52,7 @@ export function mergeSpecialEffects(card: Card): CardWithEffects {
           description: String(effect.description || ''),
           effect_type: String(effect.effect_type || ''),
           effect_icon: String(effect.effect_icon || ''),
-          value: Number(effect.value || 0)
+          value: Number(effect.value || 0) * cardModifier
         }));
       }
     } catch (error) {
@@ -71,10 +74,15 @@ export function mergeSpecialEffects(card: Card): CardWithEffects {
     }
   });
   
-  return {
+  // Create the result object with all required properties
+  const result: CardWithEffects = {
     ...cardWithoutEffects,
-    special_effects: Array.from(uniqueEffects.values())
+    special_effects: Array.from(uniqueEffects.values()),
+    // Ensure modifier is a number (default to 1 if null or undefined)
+    modifier: cardWithoutEffects.modifier ?? 1
   };
+  
+  return result;
 }
 
 export async function fetchCards(userId: string): Promise<Card[]> {

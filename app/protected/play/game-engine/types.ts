@@ -35,6 +35,7 @@ export interface GameCard {
   isDefeated: boolean;
   gameplay_effects: GameplayEffect[];
   special_effects: SpecialEffect[];
+  modifier?: number; // Card modifier for effect scaling
 }
 
 // Game event type for tracking game history
@@ -102,6 +103,7 @@ export function convertToGameCard(card: CardWithEffects, position: number = 0): 
     rarity: card.rarity,
     position,
     isDefeated: false,
+    modifier: card.modifier || 1, // Default to 1 if not provided
     gameplay_effects: [],
     special_effects: Array.isArray(card.special_effects) 
       ? card.special_effects.map(effect => ({

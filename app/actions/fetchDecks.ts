@@ -25,6 +25,7 @@ export type CardWithEffects = Omit<Card, "special_effects"> & {
     token_price: number;
     status: Database["public"]["Enums"]["trade_listing_status"];
   }[];
+  modifier?: number; // Explicitly include the modifier property
 };
 
 export type DeckWithCards = Omit<PlayerDeck, "card_list"> & {

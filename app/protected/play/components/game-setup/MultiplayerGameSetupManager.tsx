@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Database } from "@/types/database.types";
 import { GAME_MODES, GameMode } from "../../game-modes/types";
 import { SetupPhase } from "../../game-modes/base/types";
@@ -10,6 +10,7 @@ import { PlayerDeckSetup } from "./PlayerDeckSetup";
 import { createClient } from "@/utils/supabase/client";
 import CoinFlip from "../coin-flip";
 import { CardWithEffects } from "@/app/actions/fetchDecks";
+import { toast } from "sonner";
 
 type Deck = Database["public"]["Tables"]["player_decks"]["Row"] & {
   cards: CardWithEffects[];
@@ -33,6 +34,47 @@ export function MultiplayerGameSetupManager({
   mode,
   onSetupComplete,
 }: MultiplayerGameSetupManagerProps) {
+  // Supabase client for realtime updates
+  const supabase = createClient();
+  
+  // Check if opponent is a simulated opponent
+  const [isSimulatedOpponent, setIsSimulatedOpponent] = useState(false);
+  
+  // Check if this is a simulated opponent
+  useEffect(() => {
+    // Check if the deck ID starts with "sim_deck_" (client-side simulated deck)
+    if (deck2.id && deck2.id.startsWith("sim_deck_")) {
+      console.log("Detected client-side simulated deck:", deck2.id);
+      setIsSimulatedOpponent(true);
+      return;
+    }
+    
+    // Check if the deck exists in the simulated_decks table
+    const checkIfSimulated = async () => {
+      try {
+        // Check if the deck exists in the simulated_decks table
+        const { data, error } = await supabase
+          .from("simulated_decks")
+          .select("id")
+          .eq("id", deck2.id)
+          .single();
+        
+        if (!error && data) {
+          console.log("Found deck in simulated_decks table:", data.id);
+          setIsSimulatedOpponent(true);
+        } else {
+          // Fallback to checking the user_id
+          setIsSimulatedOpponent(deck2.user_id === "00000000-0000-0000-0000-000000000000");
+        }
+      } catch (error) {
+        console.error("Error checking if deck is simulated:", error);
+        // Fallback to checking the user_id
+        setIsSimulatedOpponent(deck2.user_id === "00000000-0000-0000-0000-000000000000");
+      }
+    };
+    
+    checkIfSimulated();
+  }, [deck2.id, deck2.user_id, supabase]);
   // Track current setup phase
   const [phase, setPhase] = useState<"banning" | "reordering" | "coin-flip">("banning");
   
@@ -48,6 +90,12 @@ export function MultiplayerGameSetupManager({
   const [player1Ready, setPlayer1Ready] = useState(false);
   const [player2Ready, setPlayer2Ready] = useState(false);
   
+  // Track simulated opponent choices
+  const [simulatedChoices, setSimulatedChoices] = useState<{
+    bans: number[];
+    order: number[];
+  } | null>(null);
+  
   // Track timers
   const [banTimeRemaining, setBanTimeRemaining] = useState(GAME_MODES[mode].setup.banTimeLimit || 30);
   const [reorderTimeRemaining, setReorderTimeRemaining] = useState(GAME_MODES[mode].setup.reorderTimeLimit || 15);
@@ -56,8 +104,109 @@ export function MultiplayerGameSetupManager({
   const [showCoinFlip, setShowCoinFlip] = useState(false);
   const [player1GoesFirst, setPlayer1GoesFirst] = useState(false);
   
-  // Supabase client for realtime updates
-  const supabase = createClient();
+  // Fetch simulated opponent choices if needed
+  useEffect(() => {
+    if (!isSimulatedOpponent) return;
+    
+    const fetchSimulatedChoices = async () => {
+      try {
+        // First try to get choices from the new simulated_choices table
+        const { data: simData, error: simError } = await supabase
+          .from("simulated_choices")
+          .select("choices")
+          .eq("deck_id", deck2.id)
+          .single();
+        
+        if (!simError && simData && simData.choices) {
+          console.log("Found choices in simulated_choices table:", simData.choices);
+          setSimulatedChoices(simData.choices);
+          return;
+        }
+        
+        // If not found in simulated_choices, try the old table as fallback
+        const { data, error } = await supabase
+          .from("simulated_opponent_choices")
+          .select("choices")
+          .eq("deck_id", deck2.id)
+          .single();
+        
+        if (!error && data && data.choices) {
+          console.log("Found choices in simulated_opponent_choices table:", data.choices);
+          setSimulatedChoices(data.choices);
+          return;
+        }
+        
+        // If no choices found in either table, generate random ones
+        console.log("No choices found, generating random ones");
+        generateRandomChoices();
+      } catch (error) {
+        console.error("Error in fetchSimulatedChoices:", error);
+        // If error, generate random choices
+        generateRandomChoices();
+      }
+    };
+    
+    fetchSimulatedChoices();
+  }, [isSimulatedOpponent, deck2.id, supabase]);
+  
+  // Generate random choices for the simulated opponent
+  const generateRandomChoices = useCallback(() => {
+    // Generate random bans (2 cards from player's deck)
+    const playerDeckSize = deck1.cards.length;
+    const randomBans: number[] = [];
+    
+    // Get 2 unique random indices
+    while (randomBans.length < 2 && randomBans.length < playerDeckSize) {
+      const randomIndex = Math.floor(Math.random() * playerDeckSize);
+      if (!randomBans.includes(randomIndex)) {
+        randomBans.push(randomIndex);
+      }
+    }
+    
+    // Generate random order for the opponent's deck
+    const opponentDeckSize = deck2.cards.length;
+    const indices = Array.from({ length: opponentDeckSize }, (_, i) => i);
+    const randomOrder = indices.sort(() => 0.5 - Math.random());
+    
+    const choices = {
+      bans: randomBans,
+      order: randomOrder
+    };
+    
+    setSimulatedChoices(choices);
+    
+    // Store the choices in the new simulated_choices table
+    supabase
+      .from("simulated_choices")
+      .upsert({
+        deck_id: deck2.id,
+        choices,
+        created_at: new Date().toISOString()
+      })
+      .then(({ error }) => {
+        if (error) {
+          console.warn("Error storing simulated choices in new table:", error);
+          
+          // Fallback to the old table if the new one fails
+          supabase
+            .from("simulated_opponent_choices")
+            .upsert({
+              deck_id: deck2.id,
+              choices,
+              created_at: new Date().toISOString()
+            })
+            .then(({ error: oldError }) => {
+              if (oldError) {
+                console.warn("Error storing simulated choices in old table:", oldError);
+              } else {
+                console.log("Successfully stored choices in old table as fallback");
+              }
+            });
+        } else {
+          console.log("Successfully stored choices in new simulated_choices table");
+        }
+      });
+  }, [deck1.cards.length, deck2.cards.length, deck2.id, supabase]);
 
   // Timer for ban phase
   useEffect(() => {
@@ -91,6 +240,79 @@ export function MultiplayerGameSetupManager({
     return () => clearTimeout(timer);
   }, [phase, reorderTimeRemaining]);
 
+  // Apply simulated opponent choices when available
+  useEffect(() => {
+    if (!isSimulatedOpponent || phase !== "banning") return;
+    
+    // Apply the simulated opponent's bans with a delay to make it look natural
+    const applyBans = async () => {
+      // Prioritize banning higher rarity cards first
+      const sortedCards = [...deck1.cards].sort((a, b) => {
+        const rarityOrder: Record<string, number> = {
+          legendary: 4,
+          epic: 3,
+          rare: 2,
+          common: 1,
+          unknown: 0
+        };
+        
+        const rarityA = a.rarity?.toLowerCase() || 'unknown';
+        const rarityB = b.rarity?.toLowerCase() || 'unknown';
+        
+        return (rarityOrder[rarityB] || 0) - (rarityOrder[rarityA] || 0);
+      });
+      
+      // Ban up to 2 cards, prioritizing higher rarity
+      for (let i = 0; i < Math.min(2, sortedCards.length); i++) {
+        if (bannedCards1.length >= 2) break;
+        
+        // Random delay between 2-5 seconds
+        const delay = 2000 + Math.random() * 3000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        
+        // Ban the card
+        const cardToBan = sortedCards[i];
+        handleCardBan(cardToBan, true);
+      }
+      
+      // Mark the simulated opponent as ready after banning
+      setPlayer2Ready(true);
+    };
+    
+    applyBans();
+  }, [isSimulatedOpponent, phase, deck1.cards, bannedCards1.length]);
+  
+  // Apply simulated opponent's card reordering when phase changes to reordering
+  useEffect(() => {
+    if (!isSimulatedOpponent || !simulatedChoices || phase !== "reordering") return;
+    
+    // Apply the simulated opponent's card order
+    const applyCardOrder = async () => {
+      // Wait a random time between 2-4 seconds
+      const delay = 2000 + Math.random() * 2000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Reorder the cards based on the simulated choices
+      const newOrder: CardWithEffects[] = [];
+      
+      for (const orderIndex of simulatedChoices.order) {
+        if (orderIndex < remainingCards2.length) {
+          newOrder.push(remainingCards2[orderIndex]);
+        }
+      }
+      
+      // If we have all cards, update the order
+      if (newOrder.length === remainingCards2.length) {
+        setRemainingCards2(newOrder);
+      }
+      
+      // Mark the simulated opponent as ready
+      setPlayer2Ready(true);
+    };
+    
+    applyCardOrder();
+  }, [isSimulatedOpponent, simulatedChoices, phase, remainingCards2]);
+
   const handleCardBan = (card: CardWithEffects, isDeck1: boolean) => {
     if (phase !== "banning") return;
     
@@ -99,6 +321,12 @@ export function MultiplayerGameSetupManager({
       setBannedCards1([...bannedCards1, card]);
       setRemainingCards1(remainingCards1.filter((c) => c.id !== card.id));
     } else {
+      // Only allow player 1 to ban cards from deck 2
+      if (isSimulatedOpponent) {
+        toast.error("You cannot ban cards from a simulated opponent's deck");
+        return;
+      }
+      
       if (bannedCards2.length >= 2) return;
       setBannedCards2([...bannedCards2, card]);
       setRemainingCards2(remainingCards2.filter((c) => c.id !== card.id));
@@ -114,6 +342,12 @@ export function MultiplayerGameSetupManager({
       newOrder.splice(dropIndex, 0, draggedCard);
       setRemainingCards1(newOrder);
     } else {
+      // Only allow player 1 to reorder their own deck
+      if (isSimulatedOpponent) {
+        toast.error("You cannot reorder a simulated opponent's deck");
+        return;
+      }
+      
       const newOrder = [...remainingCards2];
       const [draggedCard] = newOrder.splice(dragIndex, 1);
       newOrder.splice(dropIndex, 0, draggedCard);

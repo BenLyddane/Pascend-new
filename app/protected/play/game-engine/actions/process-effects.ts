@@ -110,78 +110,134 @@ function processCardEffects(
 function applyEffect(effect: any, context: EffectContext): void {
   const { sourceCard, targetCard, state, isPlayer1Turn } = context;
   
+  // Get the opponent's active card
+  const isSourcePlayer1 = isPlayer1Turn === (sourceCard.id.includes('player1') || state.player1Cards.some(c => c.id === sourceCard.id));
+  const opponentCards = isSourcePlayer1 ? state.player2Cards : state.player1Cards;
+  const opponentActiveCard = opponentCards.find(card => !card.isDefeated);
+  
+  // Apply card modifier to effect value
+  // Use nullish coalescing to handle undefined/null but allow 0 as a valid value
+  const cardModifier = sourceCard.modifier !== undefined && sourceCard.modifier !== null 
+    ? sourceCard.modifier 
+    : 1;
+  
+  console.log(`Applying effect: ${effect.name}, base value: ${effect.value}, card modifier: ${cardModifier}`);
+  const effectValue = effect.value * cardModifier;
+  console.log(`Final effect value: ${effectValue}`);
+  
+  // Normalize effect type for consistent handling
+  const effectTypeLower = effect.effect_type.toLowerCase();
+  const effectNameLower = effect.name.toLowerCase();
+  
   // Apply effect based on type
-  switch (effect.effect_type.toLowerCase()) {
-    case 'heal':
-    case 'regeneration':
+  switch (true) {
+    // Healing effects
+    case effectTypeLower === 'heal' || 
+         effectTypeLower === 'regeneration' || 
+         effectNameLower.includes('regeneration') || 
+         effectNameLower.includes('heal'):
       // Heal the source card
       if (sourceCard) {
-        sourceCard.health = Math.min(sourceCard.maxHealth, sourceCard.health + effect.value);
+        sourceCard.health = Math.min(sourceCard.maxHealth, sourceCard.health + effectValue);
       }
       break;
       
-    case 'damage_boost':
-    case 'buff':
-    case 'battle momentum':
+    // Damage over time effects
+    case effectTypeLower === 'burning' || 
+         effectTypeLower === 'dot' || 
+         effectTypeLower === 'damage_over_time' || 
+         effectNameLower.includes('burning') || 
+         effectNameLower.includes('poison') || 
+         effectNameLower.includes('bleed'):
+      // Apply damage to opponent's active card
+      if (opponentActiveCard) {
+        opponentActiveCard.health = Math.max(0, opponentActiveCard.health - effectValue);
+        if (opponentActiveCard.health <= 0) {
+          opponentActiveCard.isDefeated = true;
+          opponentActiveCard.health = 0;
+        }
+      }
+      break;
+      
+    // Buff effects
+    case effectTypeLower === 'damage_boost' || 
+         effectTypeLower === 'buff' || 
+         effectTypeLower === 'battle_momentum' || 
+         effectNameLower.includes('battle momentum'):
       // Add a temporary damage boost effect
       if (sourceCard) {
         sourceCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
           effect_type: 'damage_boost',
-          effect_icon: effect.effect_icon,
-          value: effect.value,
+          effect_icon: effect.effect_icon || '💪',
+          value: effectValue,
           duration: 1, // Lasts for one turn
           source: sourceCard.id
         });
       }
       break;
       
-    case 'damage_reduction':
-    case 'shield':
-    case 'defense':
+    // Defense effects
+    case effectTypeLower === 'damage_reduction' || 
+         effectTypeLower === 'shield' || 
+         effectTypeLower === 'defense' || 
+         effectNameLower.includes('shield') || 
+         effectNameLower.includes('armor'):
       // Add a temporary damage reduction effect
       if (sourceCard) {
         sourceCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
           effect_type: 'damage_reduction',
-          effect_icon: effect.effect_icon,
-          value: effect.value,
+          effect_icon: effect.effect_icon || '🛡️',
+          value: effectValue,
           duration: 1, // Lasts for one turn
           source: sourceCard.id
         });
       }
       break;
       
-    case 'chilling presence':
-    case 'debuff':
+    // Debuff effects
+    case effectTypeLower === 'chilling_presence' || 
+         effectTypeLower === 'debuff' || 
+         effectTypeLower === 'weaken' || 
+         effectNameLower.includes('chilling') || 
+         effectNameLower.includes('frost'):
       // Reduce target's attack
-      if (targetCard) {
-        targetCard.gameplay_effects.push({
+      if (opponentActiveCard) {
+        opponentActiveCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
           effect_type: 'attack_reduction',
-          effect_icon: effect.effect_icon,
-          value: effect.value,
+          effect_icon: effect.effect_icon || '🔽',
+          value: effectValue,
           duration: 1, // Lasts for one turn
           source: sourceCard?.id
         });
       }
       break;
       
-    case 'life drain':
+    // Life drain effects
+    case effectTypeLower === 'life_drain' || 
+         effectTypeLower === 'vampiric' || 
+         effectNameLower.includes('life drain') || 
+         effectNameLower.includes('leech'):
       // Heal the source card when dealing damage
-      if (sourceCard && targetCard) {
-        sourceCard.health = Math.min(sourceCard.maxHealth, sourceCard.health + effect.value);
+      if (sourceCard && opponentActiveCard) {
+        sourceCard.health = Math.min(sourceCard.maxHealth, sourceCard.health + effectValue);
       }
       break;
       
-    case 'spiked armor':
-    case 'thorns':
+    // Thorns/reflect effects
+    case effectTypeLower === 'spiked_armor' || 
+         effectTypeLower === 'thorns' || 
+         effectTypeLower === 'reflect_damage' || 
+         effectNameLower.includes('thorns') || 
+         effectNameLower.includes('reflect'):
       // Reflect damage back to attacker
       if (sourceCard && targetCard) {
-        targetCard.health = Math.max(0, targetCard.health - effect.value);
+        targetCard.health = Math.max(0, targetCard.health - effectValue);
         if (targetCard.health <= 0) {
           targetCard.isDefeated = true;
           targetCard.health = 0;
@@ -189,31 +245,35 @@ function applyEffect(effect: any, context: EffectContext): void {
       }
       break;
       
-    case 'poison':
-    case 'dot':
+    // Poison/DoT application
+    case effectTypeLower === 'poison' || 
+         effectNameLower.includes('poison'):
       // Apply damage over time effect
-      if (targetCard) {
-        targetCard.gameplay_effects.push({
+      if (opponentActiveCard) {
+        opponentActiveCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
           effect_type: 'damage_over_time',
-          effect_icon: effect.effect_icon,
-          value: effect.value,
+          effect_icon: effect.effect_icon || '☠️',
+          value: effectValue,
           duration: 3, // Lasts for three turns
           source: sourceCard?.id
         });
       }
       break;
       
-    case 'stun':
-    case 'freeze':
+    // Stun effects
+    case effectTypeLower === 'stun' || 
+         effectTypeLower === 'freeze' || 
+         effectNameLower.includes('stun') || 
+         effectNameLower.includes('freeze'):
       // Prevent target from attacking
-      if (targetCard) {
-        targetCard.gameplay_effects.push({
+      if (opponentActiveCard) {
+        opponentActiveCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
           effect_type: 'stun',
-          effect_icon: effect.effect_icon,
+          effect_icon: effect.effect_icon || '⚡',
           value: 0,
           duration: 1, // Lasts for one turn
           source: sourceCard?.id
@@ -221,15 +281,16 @@ function applyEffect(effect: any, context: EffectContext): void {
       }
       break;
       
+    // Default case for any other effect types
     default:
       // For any other effect types, add a generic gameplay effect
       if (sourceCard) {
         sourceCard.gameplay_effects.push({
           name: effect.name,
           description: effect.description,
-          effect_type: effect.effect_type,
+          effect_type: effectTypeLower,
           effect_icon: effect.effect_icon || '✨',
-          value: effect.value,
+          value: effectValue,
           duration: 1, // Default to one turn
           source: sourceCard.id
         });
@@ -253,7 +314,7 @@ function applyEffect(effect: any, context: EffectContext): void {
       effectDescription: effect.description
         .replace(/{modifier}/g, effect.value.toString())
         .replace(/{value}/g, effect.value.toString()),
-      effectValue: effect.value,
+      effectValue: effectValue,
       effectType: effect.effect_type,
       sourcePlayer: isPlayer1Turn ? 1 : 2,
       sourcePlayerName: playerText,
@@ -291,14 +352,29 @@ function shouldTriggerEffect(effect: any, trigger: EffectTrigger): boolean {
     return true;
   }
   
-  // Handle special cases based on effect names
+  // Handle special cases based on effect names and types
   const effectNameLower = effect.name.toLowerCase();
+  const effectTypeLower = effect.effect_type.toLowerCase();
   
   // Handle regeneration effects on turn start
   if (trigger === 'start_turn' && 
       (effectNameLower.includes('regeneration') || 
        effectNameLower.includes('heal over time') ||
-       effectNameLower.includes('recovery'))) {
+       effectNameLower.includes('recovery') ||
+       effectTypeLower === 'regeneration' ||
+       effectTypeLower === 'heal')) {
+    return true;
+  }
+  
+  // Handle damage over time effects on turn start (burning aura, poison, etc.)
+  if (trigger === 'start_turn' && 
+      (effectNameLower.includes('burning') || 
+       effectNameLower.includes('poison') ||
+       effectNameLower.includes('bleed') ||
+       effectNameLower.includes('damage over time') ||
+       effectTypeLower === 'dot' ||
+       effectTypeLower === 'damage_over_time' ||
+       effectTypeLower === 'burning')) {
     return true;
   }
   
@@ -306,7 +382,9 @@ function shouldTriggerEffect(effect: any, trigger: EffectTrigger): boolean {
   if (trigger === 'damage_dealt' && 
       (effectNameLower.includes('battle momentum') || 
        effectNameLower.includes('power up') ||
-       effectNameLower.includes('strength'))) {
+       effectNameLower.includes('strength') ||
+       effectTypeLower === 'battle_momentum' ||
+       effectTypeLower === 'buff')) {
     return true;
   }
   
@@ -314,7 +392,9 @@ function shouldTriggerEffect(effect: any, trigger: EffectTrigger): boolean {
   if (trigger === 'damage_dealt' && 
       (effectNameLower.includes('life drain') || 
        effectNameLower.includes('vampiric') ||
-       effectNameLower.includes('leech'))) {
+       effectNameLower.includes('leech') ||
+       effectTypeLower === 'life_drain' ||
+       effectTypeLower === 'vampiric')) {
     return true;
   }
   
@@ -322,7 +402,9 @@ function shouldTriggerEffect(effect: any, trigger: EffectTrigger): boolean {
   if (trigger === 'damage_received' && 
       (effectNameLower.includes('spiked armor') || 
        effectNameLower.includes('thorns') ||
-       effectNameLower.includes('reflect'))) {
+       effectNameLower.includes('reflect') ||
+       effectTypeLower === 'thorns' ||
+       effectTypeLower === 'reflect_damage')) {
     return true;
   }
   
@@ -330,7 +412,9 @@ function shouldTriggerEffect(effect: any, trigger: EffectTrigger): boolean {
   if (trigger === 'attack' && 
       (effectNameLower.includes('chilling presence') || 
        effectNameLower.includes('frost') ||
-       effectNameLower.includes('weaken'))) {
+       effectNameLower.includes('weaken') ||
+       effectTypeLower === 'debuff' ||
+       effectTypeLower === 'weaken')) {
     return true;
   }
   

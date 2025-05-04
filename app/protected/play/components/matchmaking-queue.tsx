@@ -50,6 +50,10 @@ export function MatchmakingQueue() {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+  
+  // Calculate time until simulated opponent (30 seconds)
+  const timeUntilSimulated = Math.max(0, 30 - searchTime);
+  const showSimulatedMessage = searchTime >= 20; // Show message when 10 seconds away
 
   return (
     <div className="flex flex-col items-center justify-center p-8 bg-accent/20 rounded-lg">
@@ -80,8 +84,28 @@ export function MatchmakingQueue() {
         </div>
       </div>
       
-      <div className="mt-6 text-sm text-muted-foreground text-center">
-        Matching you with players of similar skill level...
+      <div className="mt-6 text-sm text-center space-y-2">
+        <p className="text-muted-foreground">
+          Matching you with players of similar skill level...
+        </p>
+        
+        {showSimulatedMessage && (
+          <p className={timeUntilSimulated === 0 ? "text-green-500 font-medium animate-pulse" : "text-amber-500"}>
+            {timeUntilSimulated === 0 
+              ? "Creating simulated opponent..." 
+              : `Creating simulated opponent in ${timeUntilSimulated} seconds`}
+          </p>
+        )}
+        
+        <div className="mt-4 p-3 bg-card rounded-md text-xs text-left">
+          <h4 className="font-semibold mb-1">How Matchmaking Works:</h4>
+          <ul className="list-disc pl-4 space-y-1">
+            <li>We match you with players of similar rank points</li>
+            <li>Queue position decreases as we find better matches</li>
+            <li>After 30 seconds, we'll create a simulated opponent</li>
+            <li>Simulated opponents have balanced decks for fair play</li>
+          </ul>
+        </div>
       </div>
     </div>
   );
